@@ -49,6 +49,16 @@ Los datos se encuentran separados en los archivos CSV dentro de `data/processed/
 - **Area complementaria:** Aprendizaje automatico (modelo clasificador).
 - **Justificacion:** El nucleo del proyecto es interpretar imagenes y entrenar un modelo con datos etiquetados.
 
+### Semana 04 - Busqueda en espacio de estados (plan de recuperacion)
+
+- **Area:** Busqueda informada en espacio de estados.
+- **Problema:** planificar la secuencia de tratamientos de menor costo que lleve a una planta del estado enfermo detectado hacia el estado sano.
+- **Estado inicial:** la enfermedad detectada por el clasificador de las semanas 02/03.
+- **Metodo:** A* con f(n) = g(n) + h(n); g(n) acumula el esfuerzo de los tratamientos y h(n) es una heuristica admisible (estimacion optimista del esfuerzo restante).
+- **Modelo:** grafo didactico de estados de salud (enfermedad avanzada / activa / en recuperacion / sana) con tratamientos segun el tipo de enfermedad.
+- **Casos:** si el diagnostico es una planta sana, el plan es vacio; si la enfermedad es viral, el modelo reporta meta inalcanzable (sin cura, solo contencion).
+- **Ejecucion:** `python -m src.semana04_busqueda`
+
 ## Estructura del proyecto
 
 ```
@@ -61,7 +71,8 @@ plantas_enfermas/
 │   ├── config.py                   # Constantes: paths, RANDOM_STATE, IMG_SIZE
 │   ├── data_loader.py              # Funciones de carga de datos
 │   ├── semana02_entrenamiento.py   # Entrenamiento y evaluacion
-│   └── semana03_taxonomia.py       # Taxonomia de IA
+│   ├── semana03_taxonomia.py       # Taxonomia de IA
+│   └── semana04_busqueda.py        # Busqueda A* (plan de recuperacion)
 ├── main.py                         # Punto de entrada
 ├── requirements.txt
 └── README.md
@@ -104,6 +115,7 @@ python main.py
 .\.venv\Scripts\activate
 python -m src.semana02_entrenamiento
 python -m src.semana03_taxonomia
+python -m src.semana04_busqueda
 ```
 
 > **Nota:** Los modulos individuales deben ejecutarse con `python -m src.<nombre>` desde la raiz del proyecto. No usar `python src/<nombre>.py` porque los imports no funcionarian.
