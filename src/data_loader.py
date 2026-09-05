@@ -44,3 +44,10 @@ def load_images(df: pd.DataFrame, img_size: int = IMG_SIZE) -> np.ndarray:
         print(f"  Total errores: {errors}/{total}")
 
     return np.array(images)
+
+
+def preprocess_single_image(image_path: str, img_size: int = IMG_SIZE) -> np.ndarray:
+    img = Image.open(image_path).convert("RGB")
+    img = img.resize((img_size, img_size))
+    img_array = np.array(img, dtype=np.float32) / 255.0
+    return img_array.flatten()

@@ -119,6 +119,19 @@ def show_tratamientos(grafo):
             print(f"  {estado:20s} {accion:30s} {nxt:18s} {step}")
 
 
+def diagnose_recovery(class_name):
+    category = classify_class(class_name)
+
+    if category == "Plantas sanas":
+        return None, 0, 0, category
+
+    grafo = TRATAMIENTOS.get(category, TRATAMIENTOS["Sin clasificar"])
+    plan, expanded, cost = astar(grafo, ESTADO_INICIAL)
+    total = cost.get(META, 0)
+
+    return plan, total, expanded, category
+
+
 def run():
     print("=" * 70)
     print("SEMANA 04 - BUSQUEDA EN ESPACIO DE ESTADOS: PLAN DE RECUPERACION")

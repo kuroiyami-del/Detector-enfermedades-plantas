@@ -59,20 +59,30 @@ Los datos se encuentran separados en los archivos CSV dentro de `data/processed/
 - **Casos:** si el diagnostico es una planta sana, el plan es vacio; si la enfermedad es viral, el modelo reporta meta inalcanzable (sin cura, solo contencion).
 - **Ejecucion:** `python -m src.semana04_busqueda`
 
+### Semana 05 - Sistema hibrido
+
+- **Area:** Sistemas hibridos (combinacion de tecnicas de IA).
+- **Problema:** responder consultas de texto sobre problemas de plantas combinando varias tecnicas.
+- **Metodo:** el sistema procesa cada consulta con 3 tecnicas: reglas de conocimiento (palabras clave), similitud de coseno con TF-IDF sobre una base de conocimiento (`data/base_conocimiento.txt`) y un clasificador LogisticRegression entrenado con descripciones etiquetadas.
+- **Salida:** para cada consulta muestra las reglas activadas, el documento de evidencia mas parecido, su similitud y la clasificacion (fungica, viral, plaga o sana).
+- **Ejecucion:** `python -m src.semana05_sistema_hibrido`
+
 ## Estructura del proyecto
 
 ```
 plantas_enfermas/
 ├── data/
 │   ├── raw/PlantVillage-Dataset/raw/color/   # 38 carpetas con imagenes JPG
-│   └── processed/                             # CSVs y class_map.json
+│   ├── processed/                             # CSVs y class_map.json
+│   └── base_conocimiento.txt                  # Base de conocimiento (semana 05)
 ├── src/
 │   ├── __init__.py
 │   ├── config.py                   # Constantes: paths, RANDOM_STATE, IMG_SIZE
 │   ├── data_loader.py              # Funciones de carga de datos
 │   ├── semana02_entrenamiento.py   # Entrenamiento y evaluacion
 │   ├── semana03_taxonomia.py       # Taxonomia de IA
-│   └── semana04_busqueda.py        # Busqueda A* (plan de recuperacion)
+│   ├── semana04_busqueda.py        # Busqueda A* (plan de recuperacion)
+│   └── semana05_sistema_hibrido.py # Sistema hibrido (reglas + TF-IDF + ML)
 ├── main.py                         # Punto de entrada
 ├── requirements.txt
 └── README.md
@@ -116,6 +126,7 @@ python main.py
 python -m src.semana02_entrenamiento
 python -m src.semana03_taxonomia
 python -m src.semana04_busqueda
+python -m src.semana05_sistema_hibrido
 ```
 
 > **Nota:** Los modulos individuales deben ejecutarse con `python -m src.<nombre>` desde la raiz del proyecto. No usar `python src/<nombre>.py` porque los imports no funcionarian.

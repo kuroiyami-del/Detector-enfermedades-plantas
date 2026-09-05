@@ -1,13 +1,74 @@
+import json
 import time
+from pathlib import Path
 
+import joblib
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from src.config import IMG_SIZE, RANDOM_STATE
-from src.data_loader import load_class_map, load_images, load_split
+from src.config import IMG_SIZE, MODELS_DIR, RANDOM_STATE
+from src.data_loader import load_class_map, load_images, load_split, preprocess_single_image
+
+
+def train_model():
+    class_map = load_class_map()
+
+    train_df = load_split("train.csv")
+    X_train = load_images(train_df)
+    y_train = train_df["label"].values
+
+    model = make_pipeline(
+        StandardScaler(),
+        LogisticRegression(max_iter=1000, random_state=RANDOM_STATE, solver="lbfgs"),
+    )
+    model.fit(X_train, y_train)
+
+    test_df = load_split("test.csv")
+    X_test = load_images(test_df)
+    y_test = test_df["label"].values
+    pred = model.predict(X_test)
+    accuracy = accuracy_score(y_test, pred)
+
+    return model, class_map, accuracy
+
+
+def save_model(model, class_map, accuracy):
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+
+    joblib.dump(model, MODELS_DIR / "model.pkl")
+
+    with open(MODELS_DIR / "class_map.json", "w", encoding="utf-8") as f:
+        json.dump(class_map, f, indent=2, ensure_ascii=False)
+
+    meta = {"accuracy": accuracy, "img_size": IMG_SIZE}
+    with open(MODELS_DIR / "metadata.json", "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2)
+
+
+def load_model():
+    model = joblib.load(MODELS_DIR / "model.pkl")
+
+    with open(MODELS_DIR / "class_map.json", "r", encoding="utf-8") as f:
+        class_map = json.load(f)
+
+    return model, class_map
+
+
+def predict_single(model, class_map, image_path):
+    img = preprocess_single_image(image_path)
+    img = img.reshape(1, -1)
+
+    pred = model.predict(img)[0]
+    probs = model.predict_proba(img)[0]
+    confidence = float(probs.max())
+
+    idx_to_class = {v: k for k, v in class_map.items()}
+    class_name = idx_to_class.get(pred, str(pred))
+
+    return class_name, confidence
 
 
 def run():

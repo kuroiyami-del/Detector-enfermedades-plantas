@@ -1,0 +1,10 @@
+Enfermedades fungicas: manchas en las hojas, podredumbre, oxido, mildiu, moho. Causadas por hongos que prosperan en ambientes humedos. Tratamiento: fungicidas, poda de ramas afectadas, mejorar ventilacion y drenaje.
+Enfermedades bacterianas: manchas acuosas, pudricion blanda, halo amarillo alrededor de las lesiones, exudados bacterianos. Causadas por bacterias. Tratamiento: bactericidas, erradicacion parcial de tejido afectado, control estricto del riego.
+Enfermedades virales: mosaico en las hojas, amarillamiento generalizado, enrollamiento de hojas, enanismo. Sin cura quimica conocida. Tratamiento: erradicacion de plantas infectadas, control de vectores como pulgones y mosca blanca, manejo integrado.
+Plagas: presencia de insectos como acaros, pulgones, orugas, mosca blanca o minadores en el enves de las hojas. Danos por picaduras y alimentacion. Tratamiento: acaricidas o insecticidas segun la plaga, trampas pegajosas, control biologico con depredadores naturales.
+Plantas sanas: sin sintomas visibles de enfermedad o plaga. Hojas verdes, crecimiento normal, sin manchas ni deformaciones. Prevencion: riego adecuado, nutricion balanceada, monitoreo regular y buenas practicas agricolas.
+Diagnostico y monitoreo: inspeccion visual periodica de cultivos para detectar sintomas tempranos. Uso de trampas y sensores. Identificacion temprana permite tratamiento oportuno y reduce perdidas.
+Nutricion vegetal: deficiencias de nitrogeno, fosforo o potasio provocan amarillamiento, bordes quemados o crecimiento debil. Solucion: analisis de suelo, fertilizacion balanceada y enmiendas organicas.
+Manejo integrado de plagas: estrategia que combina control biologico, cultural, quimico y fisico. Objetivo: reducir el uso de quimicos y mantener el equilibrio del ecosistema del cultivo.
+Resistencia a enfermedades: variedades de plantas criadas para ser resistentes a patogenos especificos. Es la estrategia mas efectiva y sustentable a largo plazo.
+Calidad de semilla: semilla sana y certificada reduce la probabilidad de enfermedades transmitidas por la semilla. Incluye tratamientos con fungicidas o bactericidas presembrilla.
