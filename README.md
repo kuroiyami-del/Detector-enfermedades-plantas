@@ -82,7 +82,8 @@ plantas_enfermas/
 │   ├── semana02_entrenamiento.py   # Entrenamiento y evaluacion
 │   ├── semana03_taxonomia.py       # Taxonomia de IA
 │   ├── semana04_busqueda.py        # Busqueda A* (plan de recuperacion)
-│   └── semana05_sistema_hibrido.py # Sistema hibrido (reglas + TF-IDF + ML)
+│   ├── semana05_sistema_hibrido.py # Sistema hibrido (reglas + TF-IDF + ML)
+│   └── pipeline.py                 # Pipeline integrada image→prediccion→plan
 ├── main.py                         # Punto de entrada
 ├── requirements.txt
 └── README.md
@@ -118,6 +119,17 @@ plantas_enfermas/
 .\.venv\Scripts\activate
 python main.py
 ```
+
+`python main.py` abre un selector de archivos para elegir la foto de una planta;
+al seleccionarla, la consola muestra la prediccion completa: preprocesamiento,
+clase detectada con confianza, taxonomia y plan de recuperacion (A*).
+
+| Comando | Que hace |
+|---|---|
+| `python main.py` | Abre el selector de foto y predice (por defecto) |
+| `python main.py ruta/imagen.jpg` | Predice directamente esa imagen |
+| `python main.py --test` | Predice una imagen de ejemplo del test set (muestra clase real) |
+| `python main.py --semanas` | Ejecuta las 5 semanas por separado |
 
 ### Ejecutar modulos individuales
 

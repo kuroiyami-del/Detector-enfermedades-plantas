@@ -1,4 +1,7 @@
+import sys
+
 from PIL import Image
+from tkinter import Tk, filedialog
 
 from src.config import RAW_DIR
 from src.data_loader import load_split
@@ -31,14 +34,27 @@ def show_plan(plan, total, expanded):
         print(f"  {i}. {accion:30s} +{step}")
 
 
-def run():
+def ask_image():
+    root = Tk()
+    root.withdraw()
+    path = filedialog.askopenfilename(
+        title="Selecciona una foto de tu planta",
+        filetypes=[("Imagenes", "*.jpg *.jpeg *.png *.bmp")],
+    )
+    root.destroy()
+    return path
+
+
+def run(image_path=None):
     model, class_map = load_model()
 
-    test_df = load_split("test.csv")
-    idx = 0
-    filepath = test_df.iloc[idx]["filepath"]
-    image_path = str(RAW_DIR / filepath)
-    class_real = test_df.iloc[idx]["class_name"]
+    class_real = None
+    if image_path is None:
+        test_df = load_split("test.csv")
+        idx = 0
+        filepath = test_df.iloc[idx]["filepath"]
+        image_path = str(RAW_DIR / filepath)
+        class_real = test_df.iloc[idx]["class_name"]
 
     print_header(image_path)
 
@@ -53,7 +69,8 @@ def run():
     print(f"  Modelo: StandardScaler + LogisticRegression")
     print(f"  Clase detectada: {class_pred}")
     print(f"  Confianza: {confidence:.1%}")
-    print(f"  Clase real: {class_real}")
+    if class_real is not None:
+        print(f"  Clase real: {class_real}")
 
     print_step(3, "Taxonomia (semana 03)")
     category = classify_class(class_pred)
@@ -86,5 +103,21 @@ def run():
     print("=" * 60)
 
 
+def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--test":
+        run(None)
+        return
+
+    if len(sys.argv) > 1:
+        run(sys.argv[1])
+        return
+
+    image_path = ask_image()
+    if not image_path:
+        print("No se selecciono ninguna imagen.")
+        return
+    run(image_path)
+
+
 if __name__ == "__main__":
-    run()
+    main()

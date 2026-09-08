@@ -10,9 +10,7 @@ from src import (
 
 
 def main():
-    if len(sys.argv) > 1:
-        pipeline.run()
-    else:
+    if len(sys.argv) > 1 and sys.argv[1] == "--semanas":
         semana02_entrenamiento.run()
         print()
         semana03_taxonomia.run()
@@ -20,6 +18,9 @@ def main():
         semana04_busqueda.run()
         print()
         semana05_sistema_hibrido.run()
+        return
+
+    pipeline.main()
 
 
 if __name__ == "__main__":
