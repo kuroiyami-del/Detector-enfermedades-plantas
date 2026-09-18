@@ -1,725 +1,767 @@
-import threading
+"""
+PlantAI - Interfaz grafica de diagnostico de enfermedades en plantas.
+Conecta los modulos src/semana02..semana07 (clasificacion, taxonomia,
+A*, sistema hibrido y automata de validacion).
+Stack: Python 3.11 · tkinter / ttk unicamente.
+Ejecutar:  python gui.py
+"""
+
+import sys
+import os
+
+# Permitir importar src/ aunque el script se ejecute desde una subcarpeta
+_PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+while (not os.path.isdir(os.path.join(_PROJECT_ROOT, "src"))
+       and os.path.dirname(_PROJECT_ROOT) != _PROJECT_ROOT):
+    _PROJECT_ROOT = os.path.dirname(_PROJECT_ROOT)
+sys.path.insert(0, _PROJECT_ROOT)
+
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-
 from PIL import Image, ImageTk
+import threading
 
-from src.semana02_entrenamiento import load_model, predict_single
-from src.semana03_taxonomia import classify_class
-from src.semana04_busqueda import ESTADO_INICIAL, H, TRATAMIENTOS, diagnose_recovery
-from src.semana05_sistema_hibrido import answer as hybrid_answer
-from src.semana07_representaciones import construir_dfa, validar_secuencia
+# --- Importaciones del pipeline ---
+try:
+    from src.semana02_entrenamiento import load_model, predict_single, preprocess_single_image
+    from src.semana03_taxonomia import classify_class
+    from src.semana04_busqueda import diagnose_recovery
+    from src.semana05_sistema_hibrido import answer
+    from src.semana07_representaciones import validar_secuencia
+    _PIPELINE_OK = True
+except ImportError:
+    _PIPELINE_OK = False
 
-PREVIEW_W = 340
-PREVIEW_H = 340
+# --- Paleta ---
+C = {
+    "bg_app":     "#0f1f10",   # canvas global
+    "bg_sidebar": "#152416",   # sidebar izquierdo
+    "bg_card":    "#1c3020",   # tarjetas / paneles
+    "bg_main":    "#f5f7f5",   # area de contenido
+    "bg_input":   "#eef2ee",   # inputs
+    "bg_header":  "#ffffff",   # cabecera de seccion
 
-FONT_FAMILY = "Segoe UI"
-FONT_MONO = "Consolas"
+    "primary":    "#2e7d32",
+    "primary_dk": "#1b5e20",
+    "primary_lt": "#66bb6a",
+    "leaf":       "#43a047",
 
-CONSULTAS_POR_CATEGORIA = {
-    "Enfermedades fungicas": "La planta presenta manchas amarillas y signos de hongos en las hojas.",
-    "Enfermedades bacterianas": "La planta tiene manchas acuosas con halo amarillo y exudados.",
-    "Enfermedades virales": "Las hojas muestran patron de mosaico y amarillamiento.",
-    "Plagas": "Veo insectos o acaros en las hojas de mi planta.",
-    "Plantas sanas": "Mi planta esta sana, con hojas verdes y sin manchas.",
-    "Sin clasificar": "La planta presenta manchas amarillas en las hojas.",
+    "accent":     "#ef6c00",
+    "accent_lt":  "#ffcc80",
+
+    "fg_light":   "#f0f4f0",
+    "fg_muted":   "#9ab09b",
+    "fg_dark":    "#1a2e1b",
+    "fg_mid":     "#4a6741",
+
+    "success":    "#388e3c",
+    "warning":    "#f57f17",
+    "danger":     "#c62828",
+    "info":       "#0277bd",
+
+    "border":     "#d8e8d8",
+    "divider":    "#263c28",
 }
 
-# ---------------------------------------------------------------------------
-# Paleta de colores
-# ---------------------------------------------------------------------------
-COLOR_BG = "#f4f6f5"          # fondo general
-COLOR_CARD = "#ffffff"        # fondo de tarjetas
-COLOR_PRIMARY = "#2e7d32"     # verde principal
-COLOR_PRIMARY_DARK = "#1b5e20"
-COLOR_PRIMARY_LIGHT = "#e8f5e9"
-COLOR_ACCENT = "#ef6c00"      # advertencia / enfermedad
-COLOR_DANGER = "#c62828"      # error
-COLOR_TEXT = "#1f2a1f"
-COLOR_TEXT_MUTED = "#6b7a6b"
-COLOR_BORDER = "#dfe6df"
+FONT = {
+    "display":  ("Segoe UI", 18, "bold"),
+    "h1":       ("Segoe UI", 15, "bold"),
+    "h2":       ("Segoe UI", 12, "bold"),
+    "body":     ("Segoe UI", 10),
+    "body_med": ("Segoe UI", 10, "bold"),
+    "caption":  ("Segoe UI", 8),
+    "mono":     ("Consolas", 9),
+    "mono_sm":  ("Consolas", 8),
+    "brand":    ("Segoe UI", 16, "bold"),
+}
 
 
-class RoundedCard(tk.Frame):
-    """Tarjeta simple con borde sutil para simular elevación."""
+# --- Helpers de widgets personalizados ---
 
-    def __init__(self, parent, **kwargs):
-        outer = kwargs.pop("padding", 16)
-        super().__init__(parent, bg=COLOR_BORDER)
-        self.inner = tk.Frame(self, bg=COLOR_CARD)
-        self.inner.pack(fill="both", expand=True, padx=1, pady=1)
-        self.body = tk.Frame(self.inner, bg=COLOR_CARD, padx=outer, pady=outer)
-        self.body.pack(fill="both", expand=True)
+def _darken(hex_color: str) -> str:
+    """Oscurece un color hex ~15 %."""
+    h = hex_color.lstrip("#")
+    r, g, b = (int(h[i:i+2], 16) for i in (0, 2, 4))
+    r, g, b = max(0, int(r*0.85)), max(0, int(g*0.85)), max(0, int(b*0.85))
+    return f"#{r:02x}{g:02x}{b:02x}"
 
+
+def _make_pill_button(parent, text, command, bg=None, fg=None,
+                      padx=20, pady=8, font=None):
+    """Botón con efecto hover, sin borde visible."""
+    _bg   = bg   or C["primary"]
+    _fg   = fg   or C["fg_light"]
+    _font = font or FONT["body_med"]
+
+    btn = tk.Label(
+        parent, text=text, font=_font,
+        bg=_bg, fg=_fg, cursor="hand2",
+        padx=padx, pady=pady,
+    )
+
+    def _enter(_):
+        btn.config(bg=C["primary_dk"] if bg is None else _darken(bg))
+
+    def _leave(_):
+        btn.config(bg=_bg)
+
+    def _click(_):
+        command()
+
+    btn.bind("<Enter>", _enter)
+    btn.bind("<Leave>", _leave)
+    btn.bind("<Button-1>", _click)
+    return btn
+
+
+def _sep(parent, color=None, height=1, padx=0, pady=4):
+    """Separador horizontal delgado."""
+    f = tk.Frame(parent, bg=color or C["border"], height=height)
+    f.pack(fill="x", padx=padx, pady=pady)
+    return f
+
+
+def _tag_chip(parent, text, bg, fg="#fff"):
+    """Etiqueta tipo chip/badge."""
+    return tk.Label(parent, text=text, font=FONT["caption"],
+                    bg=bg, fg=fg, padx=6, pady=2)
+
+
+# --- Aplicacion principal ---
 
 class App(tk.Tk):
+    # --- Init ---
     def __init__(self):
         super().__init__()
-        self.title("PlantAI · Detección de enfermedades en plantas")
-        self.geometry("1000x760")
-        self.minsize(880, 640)
-        self.configure(bg=COLOR_BG)
+        self.title("PlantAI — Detección de Enfermedades")
+        self.geometry("1100x720")
+        self.minsize(900, 620)
+        self.configure(bg=C["bg_app"])
 
-        self.image_path = None
-        self._preview_img = None
-        self.model = None
-        self.class_map = None
+        self._img_path = None
+        self._photo_ref = None
+        self._thumb_ref = None
+        self._model = None
+        self._class_map = None
+        self._busy = False
 
-        self._setup_styles()
+        self._load_pipeline()
         self._build_ui()
+        self._status("Listo — selecciona una imagen o escribe síntomas.", "info")
 
-        self._set_status("Cargando modelo…", COLOR_TEXT_MUTED)
-        self.after(150, self._load_model)
+    # --- Pipeline ---
+    def _load_pipeline(self):
+        if _PIPELINE_OK:
+            try:
+                self._model, self._class_map = load_model()
+            except Exception as exc:
+                messagebox.showwarning("Pipeline", f"Error al cargar modelo:\n{exc}")
 
-    # ------------------------------------------------------------------
-    # Estilos
-    # ------------------------------------------------------------------
-    def _setup_styles(self):
-        style = ttk.Style(self)
-        try:
-            style.theme_use("clam")
-        except tk.TclError:
-            pass
-
-        style.configure(
-            "Primary.TButton",
-            background=COLOR_PRIMARY,
-            foreground="white",
-            font=(FONT_FAMILY, 11, "bold"),
-            padding=(18, 10),
-            borderwidth=0,
-            focusthickness=0,
-        )
-        style.map(
-            "Primary.TButton",
-            background=[("active", COLOR_PRIMARY_DARK), ("disabled", "#a5b8a5")],
-            foreground=[("disabled", "#e6ece6")],
-        )
-
-        style.configure(
-            "Secondary.TButton",
-            background="#ffffff",
-            foreground=COLOR_PRIMARY_DARK,
-            font=(FONT_FAMILY, 10, "bold"),
-            padding=(14, 9),
-            borderwidth=1,
-            relief="solid",
-        )
-        style.map(
-            "Secondary.TButton",
-            background=[("active", COLOR_PRIMARY_LIGHT)],
-            bordercolor=[("!disabled", COLOR_PRIMARY)],
-        )
-
-        style.configure(
-            "Plant.Horizontal.TProgressbar",
-            troughcolor=COLOR_PRIMARY_LIGHT,
-            background=COLOR_PRIMARY,
-            bordercolor=COLOR_PRIMARY_LIGHT,
-            lightcolor=COLOR_PRIMARY,
-            darkcolor=COLOR_PRIMARY,
-            thickness=6,
-        )
-
-    # ------------------------------------------------------------------
-    # Construcción de UI
-    # ------------------------------------------------------------------
+    # --- Construccion de la UI ---
     def _build_ui(self):
-        # ---------- Encabezado ----------
-        header = tk.Frame(self, bg=COLOR_PRIMARY, height=78)
-        header.pack(fill="x", side="top")
-        header.pack_propagate(False)
-
-        title_box = tk.Frame(header, bg=COLOR_PRIMARY)
-        title_box.pack(side="left", padx=24, fill="y")
-        tk.Label(
-            title_box, text="🌿 PlantAI", bg=COLOR_PRIMARY, fg="white",
-            font=(FONT_FAMILY, 20, "bold"), anchor="w",
-        ).pack(anchor="w", pady=(14, 0))
-        tk.Label(
-            title_box, text="Detección de enfermedades en plantas con IA",
-            bg=COLOR_PRIMARY, fg=COLOR_PRIMARY_LIGHT, font=(FONT_FAMILY, 10),
-        ).pack(anchor="w")
-
-        self.model_badge = tk.Label(
-            header, text="●  Cargando modelo…", bg=COLOR_PRIMARY, fg="#ffe082",
-            font=(FONT_FAMILY, 9, "bold"),
+        root_pane = tk.PanedWindow(
+            self, orient="horizontal",
+            bg=C["bg_app"], sashwidth=0, bd=0,
         )
-        self.model_badge.pack(side="right", padx=24)
+        root_pane.pack(fill="both", expand=True)
 
-        # ---------- Cuerpo ----------
-        body = tk.Frame(self, bg=COLOR_BG)
-        body.pack(fill="both", expand=True, padx=20, pady=16)
-        body.columnconfigure(0, weight=0)
-        body.columnconfigure(1, weight=1)
-        body.rowconfigure(0, weight=1)
+        self._build_sidebar(root_pane)
+        self._build_main(root_pane)
 
-        # ----- Columna izquierda: imagen -----
-        left_card = RoundedCard(body, padding=16)
-        left_card.grid(row=0, column=0, sticky="ns", padx=(0, 16))
+    # --- Sidebar ---
+    def _build_sidebar(self, parent):
+        sb = tk.Frame(parent, bg=C["bg_sidebar"], width=210)
+        sb.pack_propagate(False)
+        parent.add(sb, minsize=210)
 
-        tk.Label(
-            left_card.body, text="Imagen de la planta", bg=COLOR_CARD, fg=COLOR_TEXT,
-            font=(FONT_FAMILY, 12, "bold"),
-        ).pack(anchor="w")
+        logo_f = tk.Frame(sb, bg=C["bg_sidebar"])
+        logo_f.pack(fill="x", padx=20, pady=(28, 6))
 
-        self.preview_frame = tk.Frame(
-            left_card.body, bg="#eef2ee", width=PREVIEW_W, height=PREVIEW_H,
-            highlightbackground=COLOR_BORDER, highlightthickness=1,
+        tk.Label(logo_f, text="🌿", font=("Segoe UI Emoji", 26),
+                 bg=C["bg_sidebar"], fg=C["primary_lt"]).pack(anchor="w")
+        tk.Label(logo_f, text="PlantAI", font=FONT["brand"],
+                 bg=C["bg_sidebar"], fg=C["fg_light"]).pack(anchor="w")
+        tk.Label(logo_f, text="Diagnóstico Inteligente",
+                 font=FONT["caption"], bg=C["bg_sidebar"],
+                 fg=C["fg_muted"]).pack(anchor="w")
+
+        _sep(sb, C["divider"], padx=16, pady=8)
+
+        self._build_sidebar_section(sb, "IMAGEN", [
+            ("📁  Seleccionar foto", self._select_image),
+            ("🔬  Diagnosticar",     self._on_diagnose),
+        ])
+
+        _sep(sb, C["divider"], padx=16, pady=8)
+
+        self._build_sidebar_section(sb, "HERRAMIENTAS", [
+            ("🗑   Limpiar resultado", self._clear_results),
+        ])
+
+        tk.Frame(sb, bg=C["bg_sidebar"]).pack(fill="both", expand=True)
+
+        _sep(sb, C["divider"], padx=16, pady=0)
+        footer = tk.Frame(sb, bg=C["bg_sidebar"])
+        footer.pack(fill="x", padx=20, pady=14)
+        tk.Label(footer, text="v1.0 · IA Agrícola",
+                 font=FONT["caption"], bg=C["bg_sidebar"],
+                 fg=C["fg_muted"]).pack(anchor="w")
+        status_dot = "●" if _PIPELINE_OK else "○"
+        dot_color = C["success"] if _PIPELINE_OK else C["danger"]
+        tk.Label(footer, text=f"{status_dot} Modelo cargado" if _PIPELINE_OK
+                 else f"{status_dot} Modelo no disponible",
+                 font=FONT["caption"], bg=C["bg_sidebar"],
+                 fg=dot_color).pack(anchor="w", pady=(4, 0))
+
+    def _build_sidebar_section(self, parent, title, items):
+        tk.Label(parent, text=title, font=("Segoe UI", 7, "bold"),
+                 bg=C["bg_sidebar"], fg=C["fg_muted"],
+                 padx=20).pack(anchor="w", pady=(6, 2))
+
+        for label, cmd in items:
+            btn = tk.Label(
+                parent, text=label, font=FONT["body"],
+                bg=C["bg_sidebar"], fg=C["fg_light"],
+                anchor="w", padx=20, pady=8, cursor="hand2",
+            )
+            btn.pack(fill="x")
+
+            def _enter(e, b=btn): b.config(bg=C["bg_card"])
+            def _leave(e, b=btn): b.config(bg=C["bg_sidebar"])
+            def _click(e, c=cmd): c()
+            btn.bind("<Enter>", _enter)
+            btn.bind("<Leave>", _leave)
+            btn.bind("<Button-1>", _click)
+
+    # --- Area principal ---
+    def _build_main(self, parent):
+        main = tk.Frame(parent, bg=C["bg_main"])
+        parent.add(main)
+
+        self._build_page_header(main)
+
+        content = tk.Frame(main, bg=C["bg_main"])
+        content.pack(fill="both", expand=True, padx=16, pady=(0, 0))
+        content.columnconfigure(0, weight=0, minsize=280)
+        content.columnconfigure(1, weight=1)
+        content.rowconfigure(0, weight=1)
+
+        self._build_image_panel(content)
+        self._build_result_panel(content)
+
+        self._build_text_query(main)
+        self._build_status_bar(main)
+
+    def _build_page_header(self, parent):
+        hdr = tk.Frame(parent, bg=C["bg_header"],
+                       highlightbackground=C["border"],
+                       highlightthickness=1)
+        hdr.pack(fill="x", padx=0, pady=0)
+
+        inner = tk.Frame(hdr, bg=C["bg_header"])
+        inner.pack(fill="x", padx=20, pady=12)
+
+        tk.Label(inner, text="Panel de Diagnóstico", font=FONT["h1"],
+                 bg=C["bg_header"], fg=C["fg_dark"]).pack(side="left")
+
+        chips_f = tk.Frame(inner, bg=C["bg_header"])
+        chips_f.pack(side="right")
+        for label, color in [
+            ("Fungal", "#6a1b9a"), ("Bacterial", "#c62828"),
+            ("Viral", "#0277bd"),  ("Plaga", "#e65100"),
+            ("Sano ✓", "#2e7d32"),
+        ]:
+            c = _tag_chip(chips_f, label, color)
+            c.pack(side="left", padx=3)
+
+    # --- Panel de imagen ---
+    def _build_image_panel(self, parent):
+        card = tk.Frame(parent, bg=C["bg_header"],
+                        highlightbackground=C["border"],
+                        highlightthickness=1)
+        card.grid(row=0, column=0, sticky="nsew", padx=(0, 8), pady=8)
+
+        card_hdr = tk.Frame(card, bg=C["primary"], height=4)
+        card_hdr.pack(fill="x")
+
+        tk.Label(card, text="Vista Previa", font=FONT["h2"],
+                 bg=C["bg_header"], fg=C["fg_dark"],
+                 padx=14, pady=10).pack(anchor="w")
+
+        _sep(card, C["border"], padx=0, pady=0)
+
+        self._img_canvas = tk.Canvas(
+            card, width=260, height=230,
+            bg="#e8f0e8", highlightthickness=0,
         )
-        self.preview_frame.pack(pady=(12, 12))
-        self.preview_frame.pack_propagate(False)
+        self._img_canvas.pack(padx=14, pady=14)
+        self._draw_placeholder()
 
-        self.preview_label = tk.Label(
-            self.preview_frame, text="Sin imagen\nseleccionada", bg="#eef2ee",
-            fg=COLOR_TEXT_MUTED, font=(FONT_FAMILY, 11), justify="center",
+        _sep(card, C["border"], padx=14, pady=2)
+
+        self._img_meta = tk.Label(
+            card, text="Sin imagen seleccionada",
+            font=FONT["caption"], bg=C["bg_header"],
+            fg=C["fg_mid"], wraplength=240, justify="left",
+            padx=14, pady=6,
         )
-        self.preview_label.pack(expand=True)
+        self._img_meta.pack(anchor="w")
 
-        self.file_label = tk.Label(
-            left_card.body, text="Ningún archivo seleccionado", bg=COLOR_CARD,
-            fg=COLOR_TEXT_MUTED, font=(FONT_FAMILY, 8), wraplength=PREVIEW_W, justify="left",
+        btn_f = tk.Frame(card, bg=C["bg_header"])
+        btn_f.pack(fill="x", padx=14, pady=(4, 14))
+
+        sel_btn = _make_pill_button(btn_f, "Seleccionar imagen",
+                                    self._select_image,
+                                    bg=C["primary"], padx=14, pady=7)
+        sel_btn.pack(side="left", padx=(0, 6))
+
+        run_btn = _make_pill_button(btn_f, "Diagnosticar",
+                                    self._on_diagnose,
+                                    bg=C["accent"], padx=14, pady=7)
+        run_btn.pack(side="left")
+
+    def _draw_placeholder(self):
+        c = self._img_canvas
+        c.delete("all")
+        c.create_oval(90, 55, 170, 135, outline=C["primary_lt"],
+                      width=2, dash=(6, 3))
+        c.create_text(130, 152, text="🌿", font=("Segoe UI Emoji", 28),
+                      fill=C["primary_lt"])
+        c.create_text(130, 195, text="Arrastra o selecciona\nuna imagen",
+                      font=FONT["caption"], fill=C["fg_mid"], justify="center")
+
+    # --- Panel de resultados ---
+    def _build_result_panel(self, parent):
+        card = tk.Frame(parent, bg=C["bg_header"],
+                        highlightbackground=C["border"],
+                        highlightthickness=1)
+        card.grid(row=0, column=1, sticky="nsew", pady=8)
+        card.rowconfigure(1, weight=1)
+        card.columnconfigure(0, weight=1)
+
+        tk.Frame(card, bg=C["leaf"], height=4).grid(
+            row=0, column=0, sticky="ew")
+
+        text_frame = tk.Frame(card, bg=C["bg_header"])
+        text_frame.grid(row=1, column=0, sticky="nsew", padx=0, pady=0)
+        text_frame.rowconfigure(0, weight=1)
+        text_frame.columnconfigure(0, weight=1)
+
+        self._result_text = tk.Text(
+            text_frame,
+            font=FONT["body"], bg=C["bg_header"], fg=C["fg_dark"],
+            relief="flat", wrap="word",
+            padx=18, pady=14,
+            state="disabled",
+            selectbackground=C["primary_lt"],
+            insertbackground=C["fg_dark"],
         )
-        self.file_label.pack(anchor="w", pady=(0, 14))
+        self._result_text.grid(row=0, column=0, sticky="nsew")
 
-        ttk.Button(
-            left_card.body, text="📁  Seleccionar imagen", style="Secondary.TButton",
-            command=self._select_image,
-        ).pack(fill="x", pady=(0, 8))
-
-        self.diagnose_btn = ttk.Button(
-            left_card.body, text="🔍  Diagnosticar", style="Primary.TButton",
-            command=self._on_diagnose,
-        )
-        self.diagnose_btn.pack(fill="x")
-
-        self.progress = ttk.Progressbar(
-            left_card.body, mode="indeterminate", style="Plant.Horizontal.TProgressbar",
-        )
-
-        # ----- Columna derecha: resultados -----
-        right_card = RoundedCard(body, padding=0)
-        right_card.grid(row=0, column=1, sticky="nsew")
-        right_card.body.pack_configure(padx=0, pady=0)
-
-        results_header = tk.Frame(right_card.body, bg=COLOR_CARD, padx=18, pady=14)
-        results_header.pack(fill="x")
-        tk.Label(
-            results_header, text="Resultados del diagnóstico", bg=COLOR_CARD, fg=COLOR_TEXT,
-            font=(FONT_FAMILY, 12, "bold"),
-        ).pack(anchor="w")
-        tk.Frame(right_card.body, bg=COLOR_BORDER, height=1).pack(fill="x")
-
-        # ----- Asistente textual (semana 05): consulta en lenguaje natural -----
-        ttk.Separator(right_card.body, orient="horizontal").pack(fill="x")
-
-        assistant = tk.Frame(right_card.body, bg=COLOR_CARD, padx=18, pady=12)
-        assistant.pack(fill="x", side="bottom")
-
-        row = tk.Frame(assistant, bg=COLOR_CARD)
-        row.pack(fill="x")
-
-        tk.Label(
-            row, text="🧪  Síntomas visibles:",
-            bg=COLOR_CARD, fg=COLOR_TEXT, font=(FONT_FAMILY, 10, "bold"),
-        ).pack(side="left", padx=(0, 8))
-
-        self.consulta_entry = ttk.Entry(row, font=(FONT_FAMILY, 10))
-        self.consulta_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
-        self.consulta_entry.bind("<Return>", lambda e: self._on_diagnose())
-
-        tk.Label(
-            assistant, text="Los síntomas visibles se usan al presionar \"Diagnosticar\": "
-                            "el sistema extrae las palabras clave.",
-            bg=COLOR_CARD, fg=COLOR_TEXT_MUTED, font=(FONT_FAMILY, 9),
-            anchor="w", justify="left",
-        ).pack(anchor="w", pady=(8, 0))
-
-        text_frame = tk.Frame(right_card.body, bg=COLOR_CARD, padx=18, pady=14)
-        text_frame.pack(fill="both", expand=True)
-
-        self.results_text = tk.Text(
-            text_frame, wrap="word", font=(FONT_FAMILY, 10), state="disabled",
-            bg=COLOR_CARD, fg=COLOR_TEXT, relief="flat", bd=0, padx=4, pady=4,
-        )
-        scroll = ttk.Scrollbar(text_frame, command=self.results_text.yview)
-        self.results_text.configure(yscrollcommand=scroll.set)
-        scroll.pack(side="right", fill="y")
-        self.results_text.pack(side="left", fill="both", expand=True)
+        vsb = ttk.Scrollbar(text_frame, orient="vertical",
+                            command=self._result_text.yview)
+        vsb.grid(row=0, column=1, sticky="ns")
+        self._result_text.config(yscrollcommand=vsb.set)
 
         self._configure_text_tags()
-        self._show_placeholder()
-
-        # ---------- Barra de estado ----------
-        status_bar = tk.Frame(self, bg="#eef2ee", height=30)
-        status_bar.pack(fill="x", side="bottom")
-        status_bar.pack_propagate(False)
-        self.status_label = tk.Label(
-            status_bar, text="", bg="#eef2ee", fg=COLOR_TEXT_MUTED,
-            font=(FONT_FAMILY, 9), anchor="w", padx=16,
-        )
-        self.status_label.pack(side="left", fill="y")
+        self._show_welcome()
 
     def _configure_text_tags(self):
-        t = self.results_text
-        t.tag_configure("h1", font=(FONT_FAMILY, 13, "bold"), foreground=COLOR_PRIMARY_DARK,
-                         spacing1=10, spacing3=6)
-        t.tag_configure("h2", font=(FONT_FAMILY, 11, "bold"), foreground=COLOR_PRIMARY,
-                         spacing1=14, spacing3=4)
-        t.tag_configure("label", font=(FONT_FAMILY, 10, "bold"), foreground=COLOR_TEXT)
-        t.tag_configure("value", font=(FONT_FAMILY, 10), foreground=COLOR_TEXT)
-        t.tag_configure("muted", font=(FONT_FAMILY, 9), foreground=COLOR_TEXT_MUTED)
-        t.tag_configure("mono", font=(FONT_MONO, 9), foreground=COLOR_TEXT)
-        t.tag_configure("healthy", font=(FONT_FAMILY, 11, "bold"), foreground=COLOR_PRIMARY_DARK)
-        t.tag_configure("warning", font=(FONT_FAMILY, 10, "bold"), foreground=COLOR_ACCENT)
-        t.tag_configure("danger", font=(FONT_FAMILY, 10, "bold"), foreground=COLOR_DANGER)
-        t.tag_configure("step", font=(FONT_FAMILY, 10), foreground=COLOR_TEXT, lmargin1=16, lmargin2=16)
-        t.tag_configure("divider", foreground=COLOR_BORDER)
+        t = self._result_text
 
-    def _show_placeholder(self):
-        self._clear_results()
-        t = self.results_text
-        t.config(state="normal")
-        t.insert("end", "👋  Selecciona una imagen y/o escribe una consulta, luego presiona ", "muted")
-        t.insert("end", "Diagnosticar", "label")
-        t.insert("end", " para ver el análisis completo aquí.\n\n", "muted")
-        t.insert("end", "💡  Sin foto también obtienes una solución: el sistema híbrido ", "muted")
-        t.insert("end", "analiza el texto por palabras clave y reglas", "value")
-        t.insert("end", " y sugiere el tratamiento + la ruta A*.", "muted")
-        t.config(state="disabled")
+        t.tag_configure("h1", font=("Segoe UI", 15, "bold"),
+                        foreground=C["fg_dark"], spacing3=4)
+        t.tag_configure("h2", font=("Segoe UI", 11, "bold"),
+                        foreground=C["primary"], spacing3=3, spacing1=10)
+        t.tag_configure("h3", font=("Segoe UI", 10, "bold"),
+                        foreground=C["fg_mid"], spacing3=2)
 
-    # ------------------------------------------------------------------
-    # Carga del modelo
-    # ------------------------------------------------------------------
-    def _load_model(self):
-        try:
-            self.model, self.class_map = load_model()
-            self._set_status("Modelo cargado correctamente. Selecciona una imagen para comenzar.", COLOR_PRIMARY_DARK)
-            self.model_badge.config(text="●  Modelo listo", fg="#c8e6c9")
-        except Exception as e:
-            self._set_status(f"Error cargando el modelo: {e}", COLOR_DANGER)
-            self.model_badge.config(text="●  Error al cargar modelo", fg="#ffab91")
+        t.tag_configure("label", font=("Segoe UI", 9, "bold"),
+                        foreground=C["fg_mid"])
+        t.tag_configure("value", font=("Segoe UI", 10),
+                        foreground=C["fg_dark"])
 
-    # ------------------------------------------------------------------
-    # Selección de imagen
-    # ------------------------------------------------------------------
+        t.tag_configure("mono", font=("Consolas", 9),
+                        foreground="#37474f",
+                        background="#f0f4f0", relief="flat",
+                        lmargin1=18, lmargin2=18, spacing1=1, spacing3=1)
+
+        t.tag_configure("healthy", font=("Segoe UI", 10, "bold"),
+                        foreground=C["success"])
+        t.tag_configure("warning", font=("Segoe UI", 10, "bold"),
+                        foreground=C["warning"])
+        t.tag_configure("danger", font=("Segoe UI", 10, "bold"),
+                        foreground=C["danger"])
+        t.tag_configure("info", font=("Segoe UI", 10),
+                        foreground=C["info"])
+        t.tag_configure("accent", font=("Segoe UI", 10, "bold"),
+                        foreground=C["accent"])
+
+        t.tag_configure("hr", font=("Segoe UI", 4),
+                        foreground=C["border"],
+                        spacing1=6, spacing3=6)
+
+    def _show_welcome(self):
+        self._txt_write([
+            ("h1",    "Bienvenido a PlantAI\n"),
+            ("value", "\nSelecciona una imagen de planta para obtener un diagnóstico "
+                      "completo con:\n\n"),
+            ("label", "  ■  "), ("value", "Clasificación de enfermedad (38 clases)\n"),
+            ("label", "  ■  "), ("value", "Taxonomía de categoría (5 tipos)\n"),
+            ("label", "  ■  "), ("value", "Plan de recuperación óptimo (A*)\n"),
+            ("label", "  ■  "), ("value", "Validación de secuencia (Autómata)\n\n"),
+            ("hr",    "─" * 55 + "\n"),
+            ("info",  "También puedes describir síntomas en el campo de texto\n"
+                      "inferior para obtener recomendaciones sin imagen.\n"),
+        ])
+
+    # --- Query de texto ---
+    def _build_text_query(self, parent):
+        bar = tk.Frame(parent, bg=C["bg_header"],
+                       highlightbackground=C["border"],
+                       highlightthickness=1)
+        bar.pack(fill="x", padx=16, pady=(0, 8))
+
+        inner = tk.Frame(bar, bg=C["bg_header"])
+        inner.pack(fill="x", padx=14, pady=10)
+
+        tk.Label(inner, text="💬  Consultar por síntomas:",
+                 font=FONT["body_med"], bg=C["bg_header"],
+                 fg=C["fg_dark"]).pack(side="left", padx=(0, 10))
+
+        self._query_var = tk.StringVar()
+        entry = tk.Entry(
+            inner, textvariable=self._query_var,
+            font=FONT["body"], bg=C["bg_input"], fg=C["fg_dark"],
+            relief="flat", insertbackground=C["fg_dark"],
+        )
+        entry.pack(side="left", fill="x", expand=True, ipady=5, padx=(0, 10))
+        entry.bind("<Return>", lambda _: self._render_text_solution())
+
+        send_btn = _make_pill_button(inner, "Consultar",
+                                     self._render_text_solution,
+                                     bg=C["primary_dk"], padx=16, pady=5)
+        send_btn.pack(side="left")
+
+    # --- Status bar ---
+    def _build_status_bar(self, parent):
+        sb = tk.Frame(parent, bg=C["bg_app"], height=26)
+        sb.pack(fill="x", side="bottom")
+        sb.pack_propagate(False)
+
+        self._status_dot = tk.Label(sb, text="●", font=("Segoe UI", 9),
+                                    bg=C["bg_app"], fg=C["success"])
+        self._status_dot.pack(side="left", padx=(14, 4), pady=4)
+
+        self._status_label = tk.Label(sb, text="", font=FONT["caption"],
+                                      bg=C["bg_app"], fg=C["fg_muted"],
+                                      anchor="w")
+        self._status_label.pack(side="left", fill="x", expand=True)
+
+        self._busy_lbl = tk.Label(sb, text="", font=FONT["caption"],
+                                  bg=C["bg_app"], fg=C["accent"])
+        self._busy_lbl.pack(side="right", padx=14)
+
+    def _status(self, msg: str, level: str = "info"):
+        colors = {
+            "info":    C["info"],
+            "success": C["success"],
+            "warning": C["warning"],
+            "error":   C["danger"],
+        }
+        self._status_dot.config(fg=colors.get(level, C["info"]))
+        self._status_label.config(text=msg)
+
+    # --- Seleccion de imagen ---
     def _select_image(self):
         path = filedialog.askopenfilename(
-            title="Selecciona una foto de tu planta",
-            filetypes=[("Imágenes", "*.jpg *.jpeg *.png *.bmp")],
+            title="Seleccionar imagen de planta",
+            filetypes=[
+                ("Imágenes", "*.jpg *.jpeg *.png *.bmp *.tiff *.webp"),
+                ("Todos", "*.*"),
+            ],
         )
         if not path:
             return
-        self.image_path = path
-        short_name = path.replace("\\", "/").split("/")[-1]
-        self.file_label.config(text=short_name)
-        self._show_preview(path)
-        self.diagnose_btn.config(state="normal")
-        self._show_placeholder()
-        self._set_status("Imagen cargada. Lista para diagnosticar.", COLOR_TEXT_MUTED)
 
-    def _show_preview(self, path):
+        self._img_path = path
+        self._update_image_preview(path)
+        name = os.path.basename(path)
+        size = os.path.getsize(path) // 1024
+        self._img_meta.config(
+            text=f"📄 {name}\n📐 {size} KB — listo para diagnosticar"
+        )
+        self._status(f"Imagen cargada: {name}", "success")
+        self._clear_results(silent=True)
+
+    def _update_image_preview(self, path: str):
         try:
             img = Image.open(path)
-            img = img.convert("RGB")
-            img.thumbnail((PREVIEW_W - 8, PREVIEW_H - 8), Image.LANCZOS)
-            self._preview_img = ImageTk.PhotoImage(img)
-            self.preview_label.config(image=self._preview_img, text="", bg=COLOR_CARD)
-            self.preview_frame.config(bg=COLOR_CARD)
-        except Exception as e:
-            self.preview_label.config(image="", text=f"Error al leer\nla imagen", bg="#eef2ee")
-            self._set_status(f"Error al leer la imagen: {e}", COLOR_DANGER)
-
-    # ------------------------------------------------------------------
-    # Utilidades de texto / estado
-    # ------------------------------------------------------------------
-    def _set_status(self, text, color=COLOR_TEXT_MUTED):
-        self.status_label.config(text=text, fg=color)
-
-    def _clear_results(self):
-        self.results_text.config(state="normal")
-        self.results_text.delete("1.0", "end")
-        self.results_text.config(state="disabled")
-
-    def _insert(self, text, tag=None):
-        self.results_text.config(state="normal")
-        if tag:
-            self.results_text.insert("end", text, tag)
-        else:
-            self.results_text.insert("end", text)
-        self.results_text.config(state="disabled")
-        self.results_text.see("end")
-
-    def _divider(self):
-        self._insert("─" * 56 + "\n", "divider")
-
-    # ------------------------------------------------------------------
-    # Diagnóstico (en hilo aparte para no congelar la UI)
-    # ------------------------------------------------------------------
-    def _on_diagnose(self):
-        texto = self.consulta_entry.get().strip()
-
-        if not self.image_path and not texto:
-            messagebox.showwarning(
-                "Sin información",
-                "Selecciona una imagen y/o escribe una consulta en lenguaje natural "
-                "para obtener una solución.",
-            )
-            return
-
-        if not self.image_path:
-            self._run_text_solution(texto)
-            return
-
-        if self.model is None:
-            if texto:
-                self._run_text_solution(texto)
-            else:
-                messagebox.showwarning(
-                    "Modelo no disponible", "El modelo no se cargó correctamente."
-                )
-            return
-
-        self._clear_results()
-        self.diagnose_btn.config(state="disabled")
-        self.progress.pack(fill="x", pady=(10, 0))
-        self.progress.start(12)
-        self._set_status("Diagnosticando…", COLOR_PRIMARY_DARK)
-
-        thread = threading.Thread(target=self._run_diagnosis, args=(self.image_path,), daemon=True)
-        thread.start()
-
-    def _run_text_solution(self, texto):
-        self._clear_results()
-        self._set_status("Analizando consulta y proponiendo solución (sin imagen)…", COLOR_PRIMARY_DARK)
-        try:
-            data = hybrid_answer(texto)
-            self._render_text_solution(data)
-            self._set_status("Solución sugerida lista.", COLOR_PRIMARY_DARK)
-        except Exception as e:
-            self._insert("⚠  Ocurrió un error al analizar la consulta\n\n", "danger")
-            self._insert(str(e) + "\n", "value")
-            self._set_status("No pudo completarse el análisis.", COLOR_DANGER)
-
-    def _run_diagnosis(self, image_path):
-        try:
-            data = self._analyze(image_path)
-            self.after(0, lambda: self._on_diagnosis_success(data))
-        except Exception as e:
-            self.after(0, lambda: self._on_diagnosis_error(e))
-
-    def _on_diagnosis_success(self, data):
-        self.progress.stop()
-        self.progress.pack_forget()
-        self.diagnose_btn.config(state="normal")
-        self._render_report(data)
-        self._set_status("Diagnóstico completado.", COLOR_PRIMARY_DARK)
-
-    def _on_diagnosis_error(self, error):
-        self.progress.stop()
-        self.progress.pack_forget()
-        self.diagnose_btn.config(state="normal")
-        self._insert("⚠  Ocurrió un error durante el diagnóstico\n\n", "danger")
-        self._insert(str(error) + "\n", "value")
-        self._set_status("El diagnóstico no pudo completarse.", COLOR_DANGER)
-        messagebox.showerror("Error", str(error))
-
-    # ------------------------------------------------------------------
-    # Lógica de análisis (idéntica a la original, solo reestructurada)
-    # ------------------------------------------------------------------
-    def _analyze(self, image_path):
-        with Image.open(image_path) as img:
-            w, h = img.size
-
-        class_pred, confidence = predict_single(self.model, self.class_map, image_path)
-        category = classify_class(class_pred)
-        plan, total, expanded, cat = diagnose_recovery(class_pred)
-
-        consulta = self.consulta_entry.get().strip()
-        if not consulta:
-            consulta = CONSULTAS_POR_CATEGORIA.get(cat, CONSULTAS_POR_CATEGORIA["Sin clasificar"])
-
-        automata = self._build_automata(cat, plan)
-
-        return {
-            "size": (w, h),
-            "class_pred": class_pred,
-            "confidence": confidence,
-            "category": category,
-            "plan": plan,
-            "total": total,
-            "expanded": expanded,
-            "cat": cat,
-            "consulta": consulta,
-            "hibrido": hybrid_answer(consulta),
-            "automata": automata,
-        }
-
-    def _route_string(self, plan):
-        recorrido = "inicio"
-        for origen, accion, step, nxt in plan:
-            recorrido += f" → {accion} (+{step}) → {nxt}"
-        return recorrido
-
-    def _build_automata(self, cat, plan):
-        """Prepara la representacion por automata (semana 07) para el reporte."""
-        try:
-            transiciones = construir_dfa(cat)
+            img.thumbnail((260, 230), Image.LANCZOS)
+            self._thumb_ref = ImageTk.PhotoImage(img)
+            c = self._img_canvas
+            c.delete("all")
+            x = (260 - img.width)  // 2
+            y = (230 - img.height) // 2
+            c.create_image(x, y, anchor="nw", image=self._thumb_ref)
         except Exception:
-            transiciones = {}
+            self._draw_placeholder()
 
-        if cat == "Plantas sanas":
-            aceptada, final, pasos = validar_secuencia(cat, [])
-            return {
-                "transiciones": transiciones, "sana": True,
-                "plan_aceptada": aceptada, "estado_final": final, "plan_pasos": pasos,
-                "rechazos": [], "plan_existe": False,
-            }
-
-        acciones = [accion for _, accion, _, _ in (plan or [])]
-        aceptada, final, pasos = validar_secuencia(cat, acciones)
-
-        rechazos = []
-        if plan and len(acciones) >= 2:
-            seq = acciones[:-1]
-            r, rf, rp = validar_secuencia(cat, seq)
-            rechazos.append({"acciones": seq, "aceptada": r, "estado_final": rf, "pasos": rp})
-            seq2 = acciones[:1] * 2
-            r, rf, rp = validar_secuencia(cat, seq2)
-            rechazos.append({"acciones": seq2, "aceptada": r, "estado_final": rf, "pasos": rp})
-
-        return {
-            "transiciones": transiciones, "sana": False,
-            "plan_aceptada": aceptada, "estado_final": final, "plan_pasos": pasos,
-            "rechazos": rechazos, "plan_existe": plan is not None,
-        }
-
-    # ------------------------------------------------------------------
-    # Render del reporte enriquecido
-    # ------------------------------------------------------------------
-    def _render_automata(self, automata, header):
-        """Renderiza en el reporte la seccion del automata (semana 07)."""
-        self._insert("\n" + header + "\n", "h2")
-        self._insert(
-            "   El grafo de tratamientos de la semana 04 se representa como autómata:\n", "step")
-        self._insert(
-            "   (estado, tratamiento) → estado. Acepta si termina en 'healthy'.\n", "muted")
-
-        if automata["sana"]:
-            self._insert(
-                "\n   🌱  Planta sana: la meta ya está alcanzada desde el inicio.\n", "healthy")
-            self._insert("   Secuencia vacía → 'healthy' → APROBADA ✅\n", "healthy")
+    # --- Diagnostico ---
+    def _on_diagnose(self):
+        if self._busy:
+            return
+        if not self._img_path:
+            messagebox.showinfo("Sin imagen",
+                                "Selecciona una imagen antes de diagnosticar.")
+            return
+        if not _PIPELINE_OK or self._model is None:
+            messagebox.showerror("Pipeline",
+                                 "El pipeline no está disponible.")
             return
 
-        trans = automata["transiciones"]
-        self._insert(f"\n   Transiciones ({len(trans)}):\n", "label")
-        for (estado, accion), siguiente in sorted(trans.items()):
-            self._insert(f"     {estado:<22s} —{accion}→  {siguiente}\n", "mono")
+        self._busy = True
+        self._busy_lbl.config(text="⏳ Analizando…")
+        self._status("Procesando imagen…", "info")
+        threading.Thread(target=self._analyze, daemon=True).start()
 
-        if automata["plan_existe"]:
-            self._insert("\n   Validación del plan de A*:\n", "label")
-            for origen, accion, siguiente in automata["plan_pasos"]:
-                self._insert(f"     {origen:<22s} —{accion}→  {siguiente}\n", "mono")
-            if automata["plan_aceptada"]:
-                self._insert("   Resultado: ✅ APROBADO — termina en 'healthy'\n", "healthy")
-            else:
-                self._insert("   Resultado: ❌ RECHAZADO\n", "danger")
+    def _top_probs(self, image_path, top=3):
+        """Devuelve las top-N clases con su probabilidad (como pares)."""
+        img = preprocess_single_image(image_path).reshape(1, -1)
+        probs = self._model.predict_proba(img)[0]
+        idx_to_class = {v: k for k, v in self._class_map.items()}
+        names = [idx_to_class.get(int(c), str(c)) for c in self._model.classes_]
+        return sorted(zip(names, probs), key=lambda p: p[1], reverse=True)[:top]
+
+    def _analyze(self):
+        try:
+            class_name, confidence = predict_single(
+                self._model, self._class_map, self._img_path)
+
+            category = classify_class(class_name)
+
+            plan, total, expanded, cat = diagnose_recovery(class_name)
+
+            top3 = self._top_probs(self._img_path)
+
+            acciones = [accion for _, accion, _, _ in (plan or [])]
+            is_valid, _final, _pasos = validar_secuencia(cat, acciones)
+
+            self.after(0, lambda: self._render_report(
+                class_name, confidence, top3,
+                category, cat, plan, total, expanded, is_valid))
+
+        except Exception as exc:
+            self.after(0, lambda: self._show_error(str(exc)))
+        finally:
+            self.after(0, self._done_busy)
+
+    def _done_busy(self):
+        self._busy = False
+        self._busy_lbl.config(text="")
+
+    def _show_error(self, msg: str):
+        self._status(f"Error: {msg}", "error")
+        self._txt_write([
+            ("danger", f"⚠ Error durante el análisis:\n\n"),
+            ("mono",   msg + "\n"),
+        ])
+
+    # --- Render de reporte ---
+    def _render_report(self, class_name, confidence, top3,
+                       category, cat, plan, total, expanded, is_valid):
+        """Genera el reporte estructurado en el panel de resultados."""
+
+        if confidence >= 0.75:
+            conf_tag = "healthy"
+            conf_sym = "✔"
+        elif confidence >= 0.50:
+            conf_tag = "warning"
+            conf_sym = "⚠"
         else:
-            self._insert(
-                "\n   ⚠  Enfermedades virales: ninguna secuencia termina en 'healthy'\n"
-                "   (coincide con la meta inalcanzable reportada por A*).\n",
-                "danger",
-            )
+            conf_tag = "danger"
+            conf_sym = "✘"
 
-        if automata["rechazos"]:
-            self._insert("\n   Pruebas de rechazo (didácticas):\n", "label")
-            for r in automata["rechazos"]:
-                motivo = (
-                    "acción no permitida"
-                    if any("NO PERMITIDA" in p[2] for p in r["pasos"])
-                    else "termina en '" + r["estado_final"] + "'"
-                )
-                self._insert(f"     {str(r['acciones'])}\n", "mono")
-                self._insert(f"       rechazada: {motivo}\n", "muted")
+        cat_map = {
+            "Plantas sanas":            ("healthy", "✿"),
+            "Enfermedades fungicas":    ("warning", "🍄"),
+            "Enfermedades bacterianas": ("danger",  "🦠"),
+            "Enfermedades virales":     ("danger",  "⚡"),
+            "Plagas":                   ("warning", "🐛"),
+        }
+        cat_tag, cat_sym = cat_map.get(cat, ("info", "?"))
 
-    def _render_report(self, data):
-        self._clear_results()
+        lines = []
 
-        is_healthy = data["cat"] == "Plantas sanas"
+        # 1. Clasificacion
+        lines += [
+            ("h1",    "Resultado del Diagnóstico\n"),
+            ("hr",    "─" * 55 + "\n"),
 
-        # --- Encabezado con veredicto ---
-        icon = "✅" if is_healthy else "🩺"
-        tag = "healthy" if is_healthy else "warning"
-        self._insert(f"{icon}  ", None)
-        self._insert(f"{data['class_pred']}\n", tag)
-        self._insert(f"Confianza del modelo: {data['confidence']:.1%}\n\n", "muted")
+            ("h2",    "§ 1  Clasificación de Enfermedad\n"),
+            ("label", "  Clase detectada:   "),
+            ("value", f"{class_name}\n"),
+            ("label", "  Confianza:         "),
+            (conf_tag, f"{conf_sym}  {confidence:.1%}\n"),
+        ]
 
-        # --- Paso 1 ---
-        self._insert("1. Preprocesamiento de imagen\n", "h2")
-        w, h = data["size"]
-        self._insert(f"   Tamaño original:  {w}×{h} px (RGB)\n", "step")
-        self._insert("   Redimensionado:   64×64 → 12,288 características\n", "step")
+        if top3:
+            lines.append(("h3", "\n  Top-3 clases:\n"))
+            for i, (cls, prob) in enumerate(top3, 1):
+                lines.append(("mono",
+                              f"  {i}. {cls:<45} {prob:.1%}\n"))
 
-        # --- Paso 2 ---
-        self._insert("\n2. Clasificación\n", "h2")
-        self._insert("   Modelo:      ", "step")
-        self._insert("StandardScaler + LogisticRegression\n", "value")
-        self._insert("   Clase:       ", "step")
-        self._insert(f"{data['class_pred']}\n", "label")
-        self._insert("   Confianza:   ", "step")
-        self._insert(f"{data['confidence']:.1%}\n", "label")
+        # 2. Taxonomia
+        lines += [
+            ("hr",    "\n" + "─" * 55 + "\n"),
+            ("h2",    "§ 2  Categoría Taxonómica\n"),
+            ("label", "  Categoría:  "),
+            (cat_tag, f"{cat_sym}  {cat}\n"),
+        ]
 
-        # --- Paso 3 ---
-        self._insert("\n3. Taxonomía\n", "h2")
-        self._insert("   Categoría:   ", "step")
-        self._insert(f"{data['category']}\n", "label")
-
-        # --- Paso 4 ---
-        self._insert("\n4. Plan de recuperación\n", "h2")
-
-        if is_healthy:
-            self._insert("   🌱  La planta está sana. No se requiere tratamiento.\n", "healthy")
+        # 3. Plan A*
+        lines += [
+            ("hr",    "\n" + "─" * 55 + "\n"),
+            ("h2",    "§ 3  Plan de Recuperación (A*)\n"),
+        ]
+        if cat == "Plantas sanas":
+            lines.append(("healthy",
+                          "  ✿  Planta sana — no se requiere tratamiento.\n"))
+        elif plan is None:
+            lines.append(("danger",
+                          "  ⚡  Meta inalcanzable (viral): solo contención y manejo.\n"))
         else:
-            cat = data["cat"]
-            grafo = TRATAMIENTOS.get(cat, TRATAMIENTOS["Sin clasificar"])
+            lines.append(("label",
+                          f"  Costo óptimo: {total}    Nodos expandidos: {expanded}\n\n"))
+            for idx, (origen, accion, step, nxt) in enumerate(plan, 1):
+                lines.append(("mono",
+                              f"  {idx:>2}. {accion:<28} (+{step}) → {nxt}\n"))
 
-            self._insert(f"   Grafo de tratamientos ({cat})\n", "label")
-            for estado, acciones in grafo.items():
-                for accion, nxt, step in acciones:
-                    self._insert(
-                        f"     {estado:<20s} —{accion}→  {nxt}   (+{step})\n", "mono"
-                    )
+        # 4. Validacion (Automata)
+        lines += [
+            ("hr",    "\n" + "─" * 55 + "\n"),
+            ("h2",    "§ 4  Validación de Secuencia (Autómata)\n"),
+        ]
+        if cat == "Plantas sanas":
+            lines.append(("healthy",
+                          "  ✔  Secuencia vacía válida — la meta ya está alcanzada.\n"))
+        elif plan is None:
+            lines.append(("danger",
+                          "  ✘  Meta inalcanzable: ninguna secuencia llega a 'healthy'.\n"))
+        elif is_valid:
+            lines.append(("healthy",
+                          "  ✔  Secuencia válida — el plan llega a 'healthy'.\n"))
+        else:
+            lines.append(("danger",
+                          "  ✘  Secuencia inválida — el plan no termina en 'healthy'.\n"))
 
-            self._insert("\n   Recorrido A*\n", "label")
-            plan = data["plan"]
+        # 5. Resumen
+        lines += [
+            ("hr",    "\n" + "─" * 55 + "\n"),
+            ("h2",    "§ 5  Resumen Ejecutivo\n"),
+            ("label", "  Planta:     "), ("value", f"{class_name}\n"),
+            ("label", "  Categoría:  "), (cat_tag, f"{cat}\n"),
+            ("label", "  Confianza:  "), (conf_tag, f"{confidence:.1%}\n"),
+            ("label", "  DFA:        "),
+        ]
+        if cat == "Plantas sanas":
+            lines.append(("healthy", "Planta sana\n"))
+        elif plan is None:
+            lines.append(("danger", "Meta inalcanzable\n"))
+        elif is_valid:
+            lines.append(("healthy", "Protocolo válido\n"))
+        else:
+            lines.append(("danger",  "Protocolo inválido\n"))
+
+        self._txt_write(lines)
+        self._status(
+            f"Diagnóstico completo: {class_name} — {confidence:.1%}",
+            "success" if confidence >= 0.6 else "warning",
+        )
+
+    # --- Consulta de texto ---
+    def _render_text_solution(self):
+        query = self._query_var.get().strip()
+        if not query:
+            return
+        if not _PIPELINE_OK:
+            messagebox.showerror("Pipeline", "Sistema híbrido no disponible.")
+            return
+
+        self._status("Consultando sistema híbrido…", "info")
+        try:
+            response = answer(query)
+        except Exception as exc:
+            response = {"solucion": f"Error: {exc}"}
+
+        lines = [
+            ("h2",    "💬  Consulta por Síntomas\n"),
+            ("label", "  Pregunta:  "), ("value", f"{query}\n"),
+            ("hr",    "─" * 55 + "\n"),
+        ]
+
+        if isinstance(response, dict):
+            cat = response.get("categoria")
+            ruta = response.get("ruta") if isinstance(response.get("ruta"), dict) else None
+            plan = (ruta or {}).get("plan")
+
+            lines += [
+                ("label", "  Categoría:  "),
+                ("value", f"{cat or 'sin clasificar'}\n"),
+                ("label", "  Reglas:     "),
+                ("value", ", ".join(response.get("reglas") or []) + "\n"),
+                ("hr",    "─" * 55 + "\n"),
+                ("value", response.get("solucion", "") + "\n"),
+            ]
+
             if plan:
-                recorrido = "     inicio"
-                for origen, accion, step, nxt in plan:
-                    recorrido += f" → {accion} (+{step}) → {nxt}"
-                self._insert(recorrido + "\n", "mono")
+                lines += [("hr", "─" * 55 + "\n"),
+                          ("h2", "  Plan A* sugerido\n")]
+                for idx, (origen, accion, step, nxt) in enumerate(plan, 1):
+                    lines.append(("mono",
+                                  f"  {idx:>2}. {accion:<28} (+{step}) → {nxt}\n"))
+                lines.append(("value", f"  Costo óptimo: {ruta.get('total')}\n"))
 
-            if plan is None:
-                self._insert("\n   ⚠  Meta inalcanzable: no hay cura para enfermedades virales.\n", "danger")
-                self._insert("   Plan disponible: solo contención y manejo.\n", "value")
-            else:
-                self._insert(
-                    f"\n   Costo total: {data['total']}    Nodos expandidos: {data['expanded']}\n\n",
-                    "muted",
-                )
-                for i, (origen, accion, step, nxt) in enumerate(plan, start=1):
-                    self._insert(f"   {i}. ", "label")
-                    self._insert(f"{accion}", "value")
-                    self._insert(f"   (+{step})\n", "muted")
-
-        self._render_automata(data["automata"], "5. Autómata de validación (semana 07)")
-
-        # --- Recorrido y búsqueda de rutas (integración del análisis textual) ---
-        hib = data["hibrido"]
-        self._insert("\n   Recorrido y búsqueda de rutas (A*)\n", "label")
-        self._insert("   Describción de sintomas: ", "step")
-        self._insert(f"\"{data['consulta']}\"\n", "value")
-        self._insert("   Palabras clave extraídas:    ", "step")
-        self._insert((", ".join(hib["palabras_clave"]) or "ninguna") + "\n", "value")
-        self._insert("   Reglas activadas: ", "step")
-        self._insert((", ".join(hib["reglas"]) or "ninguna") + "\n", "value")
-
-        self._insert("\n   Búsqueda y cálculo de rutas:\n", "step")
-        if is_healthy:
-            self._insert(
-                "     Meta 'healthy' ya alcanzada: no hay ruta que calcular (plan vacío).\n",
-                "muted",
-            )
-        elif plan:
-            inicio = ESTADO_INICIAL
-            g_acum = 0
-            self._insert(f"     {inicio:<22s} g=0  h={H[inicio]}  f={H[inicio]}\n", "mono")
-            for origen, accion, step, nxt in plan:
-                g_acum += step
-                self._insert(
-                    f"     --{accion} (+{step})--> {nxt:<18s} g={g_acum}  h={H[nxt]}  "
-                    f"f={g_acum + H[nxt]}\n",
-                    "mono",
-                )
-            self._insert(
-                f"     Costo total: {data['total']}   Nodos expandidos: {data['expanded']}\n",
-                "muted",
-            )
+            if cat:
+                acciones = [accion for _, accion, _, _ in (plan or [])]
+                _ok, final, _pasos = validar_secuencia(cat, acciones)
+                lines += [("hr", "─" * 55 + "\n"),
+                          ("h2", "  Validación (Autómata)\n")]
+                if cat == "Plantas sanas":
+                    lines.append(("healthy",
+                                  "  ✔  Planta sana — secuencia vacía válida.\n"))
+                elif plan is None:
+                    lines.append(("danger",
+                                  "  ✘  Meta inalcanzable (viral): solo contención.\n"))
+                elif _ok:
+                    lines.append(("healthy",
+                                  f"  ✔  Secuencia válida — termina en '{final}'.\n"))
+                else:
+                    lines.append(("danger",
+                                  "  ✘  Secuencia inválida.\n"))
         else:
-            self._insert(
-                "     Meta 'healthy' inalcanzable (caso viral): solo contención y manejo.\n",
-                "danger",
-            )
+            lines.append(("value", f"{response}\n"))
 
-    def _render_text_solution(self, d):
-        self._clear_results()
+        self._txt_write(lines)
+        self._query_var.set("")
+        self._status("Respuesta generada.", "success")
 
-        self._insert("🤖  Sistema híbrido · solución sin imagen\n", "h1")
-        self._insert(f'Consulta: "{d["consulta"]}"\n\n', "value")
+    # --- Helpers de texto ---
+    def _txt_write(self, segments):
+        """Reemplaza el contenido del widget de resultados."""
+        t = self._result_text
+        t.config(state="normal")
+        t.delete("1.0", "end")
+        for tag, text in segments:
+            t.insert("end", text, tag)
+        t.config(state="disabled")
+        t.see("1.0")
 
-        self._insert("1. Palabras clave extraídas\n", "h2")
-        if d["palabras_clave"]:
-            for term in d["palabras_clave"]:
-                self._insert(f"   • {term}\n", "step")
-        else:
-            self._insert("   Ninguna palabra clave del dominio detectada.\n", "muted")
-
-        self._insert("\n2. Reglas activadas\n", "h2")
-        self._insert("   " + (", ".join(d["reglas"]) or "ninguna") + "\n", "label")
-        self._insert("   Categoría: " + (d["categoria"] or "sin clasificar") + "\n", "value")
-
-        self._insert("\n3. ¿Aplica el algoritmo A*?\n", "h2")
-        if d["aplica_astar"]:
-            self._insert("✅  SÍ aplica para búsqueda/cálculo de rutas o caminos\n", "healthy")
-        else:
-            self._insert("❌  No aplica\n", "warning")
-        self._insert("   " + " ".join(d["razones"]) + "\n", "muted")
-
-        self._insert("\n4. Solución sugerida\n", "h2")
-        self._insert("   " + d["solucion"] + "\n", "value")
-
-        if d["ruta"]:
-            self._insert("\n5. Ruta A* calculada (recorrido de tratamientos)\n", "h2")
-            ruta = d["ruta"]
-            if ruta["plan"] is None:
-                self._insert(
-                    "   ⚠  Meta 'healthy' inalcanzable: solo existe plan de contención.\n",
-                    "danger",
-                )
-            else:
-                inicio = ESTADO_INICIAL
-                g_acum = 0
-                self._insert(f"   {inicio:<22s} g=0  h={H[inicio]}  f={H[inicio]}\n", "mono")
-                for origen, accion, step, nxt in ruta["plan"]:
-                    g_acum += step
-                    self._insert(
-                        f"   --{accion} (+{step})--> {nxt:<18s} g={g_acum}  h={H[nxt]}  "
-                        f"f={g_acum + H[nxt]}\n",
-                        "mono",
-                    )
-                self._insert(
-                    f"   Costo total: {ruta['total']}   Nodos expandidos: {ruta['expanded']}\n",
-                    "muted",
-                )
-        elif d["categoria"] == "Plantas sanas":
-            self._insert("\n5. Ruta A*\n", "h2")
-            self._insert("   Meta ya alcanzada: no hay recorrido que calcular (plan vacío).\n", "muted")
-
-        if d.get("categoria"):
-            automata = self._build_automata(d["categoria"], (d.get("ruta") or {}).get("plan"))
-            self._render_automata(automata, "6. Autómata de validación (semana 07)")
-
-        self._insert("\nCasos de uso de A* (rutas/caminos)\n", "h2")
-        if d["casos"]:
-            for caso in d["casos"]:
-                self._insert(f"   • {caso['titulo']}\n", "label")
-                self._insert(f"       {caso['detalle']}\n", "step")
-        else:
-            self._insert("   Sin casos determinados.\n", "muted")
-
-        self._insert("\nExplicación\n", "h2")
-        self._insert(d["explicacion"] + "\n", "value")
-        self._divider()
-        self._insert("Análisis completado ✔\n", "muted")
+    def _clear_results(self, silent: bool = False):
+        self._txt_write([("value", "")])
+        self._show_welcome()
+        if not silent:
+            self._status("Resultados limpiados.", "info")
 
 
 def main():
