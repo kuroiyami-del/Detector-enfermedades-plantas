@@ -8,6 +8,7 @@ from src.semana02_entrenamiento import load_model, predict_single
 from src.semana03_taxonomia import classify_class
 from src.semana04_busqueda import ESTADO_INICIAL, H, TRATAMIENTOS, diagnose_recovery
 from src.semana05_sistema_hibrido import answer as hybrid_answer
+from src.semana07_representaciones import construir_dfa, validar_secuencia
 
 PREVIEW_W = 340
 PREVIEW_H = 340
@@ -438,6 +439,8 @@ class App(tk.Tk):
         if not consulta:
             consulta = CONSULTAS_POR_CATEGORIA.get(cat, CONSULTAS_POR_CATEGORIA["Sin clasificar"])
 
+        automata = self._build_automata(cat, plan)
+
         return {
             "size": (w, h),
             "class_pred": class_pred,
@@ -449,6 +452,7 @@ class App(tk.Tk):
             "cat": cat,
             "consulta": consulta,
             "hibrido": hybrid_answer(consulta),
+            "automata": automata,
         }
 
     def _route_string(self, plan):
@@ -457,9 +461,87 @@ class App(tk.Tk):
             recorrido += f" → {accion} (+{step}) → {nxt}"
         return recorrido
 
+    def _build_automata(self, cat, plan):
+        """Prepara la representacion por automata (semana 07) para el reporte."""
+        try:
+            transiciones = construir_dfa(cat)
+        except Exception:
+            transiciones = {}
+
+        if cat == "Plantas sanas":
+            aceptada, final, pasos = validar_secuencia(cat, [])
+            return {
+                "transiciones": transiciones, "sana": True,
+                "plan_aceptada": aceptada, "estado_final": final, "plan_pasos": pasos,
+                "rechazos": [], "plan_existe": False,
+            }
+
+        acciones = [accion for _, accion, _, _ in (plan or [])]
+        aceptada, final, pasos = validar_secuencia(cat, acciones)
+
+        rechazos = []
+        if plan and len(acciones) >= 2:
+            seq = acciones[:-1]
+            r, rf, rp = validar_secuencia(cat, seq)
+            rechazos.append({"acciones": seq, "aceptada": r, "estado_final": rf, "pasos": rp})
+            seq2 = acciones[:1] * 2
+            r, rf, rp = validar_secuencia(cat, seq2)
+            rechazos.append({"acciones": seq2, "aceptada": r, "estado_final": rf, "pasos": rp})
+
+        return {
+            "transiciones": transiciones, "sana": False,
+            "plan_aceptada": aceptada, "estado_final": final, "plan_pasos": pasos,
+            "rechazos": rechazos, "plan_existe": plan is not None,
+        }
+
     # ------------------------------------------------------------------
     # Render del reporte enriquecido
     # ------------------------------------------------------------------
+    def _render_automata(self, automata, header):
+        """Renderiza en el reporte la seccion del automata (semana 07)."""
+        self._insert("\n" + header + "\n", "h2")
+        self._insert(
+            "   El grafo de tratamientos de la semana 04 se representa como autómata:\n", "step")
+        self._insert(
+            "   (estado, tratamiento) → estado. Acepta si termina en 'healthy'.\n", "muted")
+
+        if automata["sana"]:
+            self._insert(
+                "\n   🌱  Planta sana: la meta ya está alcanzada desde el inicio.\n", "healthy")
+            self._insert("   Secuencia vacía → 'healthy' → APROBADA ✅\n", "healthy")
+            return
+
+        trans = automata["transiciones"]
+        self._insert(f"\n   Transiciones ({len(trans)}):\n", "label")
+        for (estado, accion), siguiente in sorted(trans.items()):
+            self._insert(f"     {estado:<22s} —{accion}→  {siguiente}\n", "mono")
+
+        if automata["plan_existe"]:
+            self._insert("\n   Validación del plan de A*:\n", "label")
+            for origen, accion, siguiente in automata["plan_pasos"]:
+                self._insert(f"     {origen:<22s} —{accion}→  {siguiente}\n", "mono")
+            if automata["plan_aceptada"]:
+                self._insert("   Resultado: ✅ APROBADO — termina en 'healthy'\n", "healthy")
+            else:
+                self._insert("   Resultado: ❌ RECHAZADO\n", "danger")
+        else:
+            self._insert(
+                "\n   ⚠  Enfermedades virales: ninguna secuencia termina en 'healthy'\n"
+                "   (coincide con la meta inalcanzable reportada por A*).\n",
+                "danger",
+            )
+
+        if automata["rechazos"]:
+            self._insert("\n   Pruebas de rechazo (didácticas):\n", "label")
+            for r in automata["rechazos"]:
+                motivo = (
+                    "acción no permitida"
+                    if any("NO PERMITIDA" in p[2] for p in r["pasos"])
+                    else "termina en '" + r["estado_final"] + "'"
+                )
+                self._insert(f"     {str(r['acciones'])}\n", "mono")
+                self._insert(f"       rechazada: {motivo}\n", "muted")
+
     def _render_report(self, data):
         self._clear_results()
 
@@ -528,6 +610,8 @@ class App(tk.Tk):
                     self._insert(f"   {i}. ", "label")
                     self._insert(f"{accion}", "value")
                     self._insert(f"   (+{step})\n", "muted")
+
+        self._render_automata(data["automata"], "5. Autómata de validación (semana 07)")
 
         # --- Recorrido y búsqueda de rutas (integración del análisis textual) ---
         hib = data["hibrido"]
@@ -619,6 +703,10 @@ class App(tk.Tk):
         elif d["categoria"] == "Plantas sanas":
             self._insert("\n5. Ruta A*\n", "h2")
             self._insert("   Meta ya alcanzada: no hay recorrido que calcular (plan vacío).\n", "muted")
+
+        if d.get("categoria"):
+            automata = self._build_automata(d["categoria"], (d.get("ruta") or {}).get("plan"))
+            self._render_automata(automata, "6. Autómata de validación (semana 07)")
 
         self._insert("\nCasos de uso de A* (rutas/caminos)\n", "h2")
         if d["casos"]:

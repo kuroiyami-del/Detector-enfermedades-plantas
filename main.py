@@ -6,6 +6,7 @@ from src import (
     semana03_taxonomia,
     semana04_busqueda,
     semana05_sistema_hibrido,
+    semana07_representaciones,
 )
 
 
@@ -18,6 +19,8 @@ def main():
         semana04_busqueda.run()
         print()
         semana05_sistema_hibrido.run()
+        print()
+        semana07_representaciones.run()
         return
 
     pipeline.main()

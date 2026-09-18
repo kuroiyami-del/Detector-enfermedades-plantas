@@ -67,6 +67,15 @@ Los datos se encuentran separados en los archivos CSV dentro de `data/processed/
 - **Salida:** para cada consulta muestra las reglas activadas, el documento de evidencia mas parecido, su similitud y la clasificacion (fungica, viral, plaga o sana).
 - **Ejecucion:** `python -m src.semana05_sistema_hibrido`
 
+### Semana 07 - Representaciones
+
+- **Area:** Representacion del conocimiento.
+- **Problema:** representar formalmente que secuencias de tratamientos son validas y llevan a una planta a estar sana.
+- **Metodo:** automatizacion del grafo de tratamientos de la semana 04. Se construye un automata finito determinista (DFA) a partir de `TRATAMIENTOS`: los estados son los niveles de salud, los simbolos son los tratamientos, y acepta una secuencia si termina en `healthy`.
+- **Salida:** tablas de transicion del automata, validacion del plan optimo de A* (aceptado), secuencias rechazadas por no permitirse o no alcanzar la meta, el caso viral (meta inalcanzable, igual que A*) y la planta sana (secuencia vacia aceptada).
+- **Relacion con A*:** A* (semana 04) encuentra la mejor secuencia; el automata (semana 07) representa el conocimiento de cuando una secuencia es valida.
+- **Ejecucion:** `python -m src.semana07_representaciones`
+
 ## Estructura del proyecto
 
 ```
@@ -83,6 +92,7 @@ plantas_enfermas/
 │   ├── semana03_taxonomia.py       # Taxonomia de IA
 │   ├── semana04_busqueda.py        # Busqueda A* (plan de recuperacion)
 │   ├── semana05_sistema_hibrido.py # Sistema hibrido (reglas + TF-IDF + ML)
+│   ├── semana07_representaciones.py # Representaciones (automata sobre semana 04)
 │   └── pipeline.py                 # Pipeline integrada image→prediccion→plan
 ├── main.py                         # Punto de entrada
 ├── requirements.txt
@@ -139,6 +149,7 @@ python -m src.semana02_entrenamiento
 python -m src.semana03_taxonomia
 python -m src.semana04_busqueda
 python -m src.semana05_sistema_hibrido
+python -m src.semana07_representaciones
 ```
 
 > **Nota:** Los modulos individuales deben ejecutarse con `python -m src.<nombre>` desde la raiz del proyecto. No usar `python src/<nombre>.py` porque los imports no funcionarian.
