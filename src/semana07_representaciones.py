@@ -33,6 +33,85 @@ def mostrar_vector(vector):
     print(f"  Distancia a hoja sana (euclidiana): {distancia_hoja_sana(vector):.3f}")
 
 
+# ---------------------------------------------------------------------------
+# Representacion simbolica (seccion 4): hechos + reglas del diagnostico real.
+# Los hechos son etiquetas de sintomas observados en la hoja (conceptos, no
+# numeros); las reglas del conocimiento agronomico concluyen una sospecha con
+# el esquema: SI se cumplen determinadas condiciones ENTONCES se infiere algo.
+# ---------------------------------------------------------------------------
+
+# Sintomas observados en una hoja, expresados como hechos (etiquetas) del
+# dominio real del proyecto (deteccion de enfermedades en plantas).
+HECHOS_POR_CATEGORIA = {
+    "Enfermedades fungicas": {
+        "esporas_en_borde", "manchas_concetricas", "marchitamiento_localizado",
+    },
+    "Enfermedades bacterianas": {
+        "manchas_angulares", "halo_amarillento", "exudado_acuoso",
+    },
+    "Enfermedades virales": {
+        "patron_mosaico", "enrollamiento_hoja", "enanismo_planta",
+    },
+    "Plagas": {
+        "telarana_fina", "punteado_clorotico", "mordeduras_visibles",
+    },
+    "Plantas sanas": {
+        "follaje_uniforme", "sin_signos_de_dano",
+    },
+}
+
+# Reglas simbolicas: SI (conjunto de condiciones) ENTONCES conclusion.
+REGLAS_SIMBOLICAS = [
+    ({"esporas_en_borde", "manchas_concetricas"}, "sospecha_fungica"),
+    ({"manchas_angulares", "halo_amarillento", "exudado_acuoso"},
+     "sospecha_bacteriana"),
+    ({"patron_mosaico", "enrollamiento_hoja"}, "sospecha_viral"),
+    ({"telarana_fina", "punteado_clorotico"}, "sospecha_acaros"),
+    ({"follaje_uniforme", "sin_signos_de_dano"}, "planta_sana"),
+]
+
+SIGNIFICADO_CONCLUSION = {
+    "sospecha_fungica":    "Enfermedad fungica",
+    "sospecha_bacteriana": "Enfermedad bacteriana",
+    "sospecha_viral":      "Enfermedad viral",
+    "sospecha_acaros":     "Plaga de acaros",
+    "planta_sana":         "Planta sana",
+    "sin_concluir":        "Sospecha no concluyente",
+}
+
+
+def representacion_simbolica(categoria):
+    """Evalua los hechos simbolicos de la categoria sobre las reglas IF-THEN.
+
+    Devuelve un dict con los hechos observados, cada regla evaluada (aplicada
+    o no) y la conclusion simbolica obtenida, mas su significado en español.
+    """
+    hechos = HECHOS_POR_CATEGORIA.get(categoria, set())
+    reglas = []
+    conclusion = "sin_concluir"
+    for condiciones, resultado in REGLAS_SIMBOLICAS:
+        aplica = condiciones.issubset(hechos)
+        reglas.append((condiciones, resultado, aplica))
+        if aplica and conclusion == "sin_concluir":
+            conclusion = resultado
+    return {
+        "categoria": categoria,
+        "hechos": sorted(hechos),
+        "reglas": reglas,
+        "conclusion": conclusion,
+        "significado": SIGNIFICADO_CONCLUSION.get(conclusion, conclusion),
+    }
+
+
+def mostrar_representacion_simbolica(info):
+    print(f"  Categoria: {info['categoria']}")
+    print(f"  Hechos observados: {info['hechos']}")
+    for condiciones, resultado, aplica in info["reglas"]:
+        estado = "APLICADA" if aplica else "no aplicada"
+        print(f"    SI {sorted(condiciones)} ENTONCES {resultado:<20s} [{estado}]")
+    print(f"  Conclusion simbolica: {info['conclusion']} ({info['significado']})")
+
+
 # Convierte el grafo de tratamientos de la semana 04 en un automata.
 # Devuelve un diccionario (estado, accion) -> estado siguiente.
 def construir_dfa(categoria):
