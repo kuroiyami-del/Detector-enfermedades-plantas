@@ -27,7 +27,8 @@ try:
     from src.semana03_taxonomia import classify_class
     from src.semana04_busqueda import diagnose_recovery
     from src.semana05_sistema_hibrido import answer
-    from src.semana07_representaciones import validar_secuencia
+    from src.semana07_representaciones import (
+        validar_secuencia, extraer_vector_hoja, distancia_hoja_sana)
     _PIPELINE_OK = True
 except ImportError:
     _PIPELINE_OK = False
@@ -544,12 +545,16 @@ class App(tk.Tk):
 
             top3 = self._top_probs(self._img_path)
 
+            vector = extraer_vector_hoja(self._img_path)
+            distancia = distancia_hoja_sana(vector)
+
             acciones = [accion for _, accion, _, _ in (plan or [])]
             is_valid, _final, _pasos = validar_secuencia(cat, acciones)
 
             self.after(0, lambda: self._render_report(
                 class_name, confidence, top3,
-                category, cat, plan, total, expanded, is_valid))
+                category, cat, plan, total, expanded, is_valid,
+                vector, distancia))
 
         except Exception as exc:
             self.after(0, lambda: self._show_error(str(exc)))
@@ -569,7 +574,8 @@ class App(tk.Tk):
 
     # --- Render de reporte ---
     def _render_report(self, class_name, confidence, top3,
-                       category, cat, plan, total, expanded, is_valid):
+                       category, cat, plan, total, expanded, is_valid,
+                       vector=None, distancia=None):
         """Genera el reporte estructurado en el panel de resultados."""
 
         if confidence >= 0.75:
@@ -619,10 +625,28 @@ class App(tk.Tk):
             (cat_tag, f"{cat_sym}  {cat}\n"),
         ]
 
-        # 3. Plan A*
+        # 3. Representacion numerica (semana 07)
         lines += [
             ("hr",    "\n" + "─" * 55 + "\n"),
-            ("h2",    "§ 3  Plan de Recuperación (A*)\n"),
+            ("h2",    "§ 3  Representación Numérica de la Hoja (semana 07)\n"),
+            ("label", "  Vector (verdor, amarillez, manchas):  "),
+            ("mono",  f"{vector}\n" if vector else "no disponible\n"),
+            ("label", "  Hoja sana de referencia:              "),
+            ("mono",  "[0.85, 0.10, 0.05]\n"),
+            ("label", "  Distancia a hoja sana (euclidiana):   "),
+        ]
+        if distancia is None:
+            lines.append(("value", "no disponible\n"))
+        else:
+            lines.append(("mono", f"{distancia:.3f}\n"))
+        lines.append(("info",
+                      "  0 = idéntica a la referencia; a mayor valor,\n"
+                      "  más alejada de la hoja sana.\n"))
+
+        # 4. Plan A*
+        lines += [
+            ("hr",    "\n" + "─" * 55 + "\n"),
+            ("h2",    "§ 4  Plan de Recuperación (A*)\n"),
         ]
         if cat == "Plantas sanas":
             lines.append(("healthy",
@@ -637,10 +661,10 @@ class App(tk.Tk):
                 lines.append(("mono",
                               f"  {idx:>2}. {accion:<28} (+{step}) → {nxt}\n"))
 
-        # 4. Validacion (Automata)
+        # 5. Validacion (Automata)
         lines += [
             ("hr",    "\n" + "─" * 55 + "\n"),
-            ("h2",    "§ 4  Validación de Secuencia (Autómata)\n"),
+            ("h2",    "§ 5  Validación de Secuencia (Autómata)\n"),
         ]
         if cat == "Plantas sanas":
             lines.append(("healthy",
@@ -655,13 +679,16 @@ class App(tk.Tk):
             lines.append(("danger",
                           "  ✘  Secuencia inválida — el plan no termina en 'healthy'.\n"))
 
-        # 5. Resumen
+        # 6. Resumen
         lines += [
             ("hr",    "\n" + "─" * 55 + "\n"),
-            ("h2",    "§ 5  Resumen Ejecutivo\n"),
+            ("h2",    "§ 6  Resumen Ejecutivo\n"),
             ("label", "  Planta:     "), ("value", f"{class_name}\n"),
             ("label", "  Categoría:  "), (cat_tag, f"{cat}\n"),
             ("label", "  Confianza:  "), (conf_tag, f"{confidence:.1%}\n"),
+            ("label", "  Dist. sana: "),
+            ("value" if distancia is None else "mono",
+             ("n/d\n" if distancia is None else f"{distancia:.3f}\n")),
             ("label", "  DFA:        "),
         ]
         if cat == "Plantas sanas":

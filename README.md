@@ -70,9 +70,12 @@ Los datos se encuentran separados en los archivos CSV dentro de `data/processed/
 ### Semana 07 - Representaciones
 
 - **Area:** Representacion del conocimiento.
-- **Problema:** representar formalmente que secuencias de tratamientos son validas y llevan a una planta a estar sana.
-- **Metodo:** automatizacion del grafo de tratamientos de la semana 04. Se construye un automata finito determinista (DFA) a partir de `TRATAMIENTOS`: los estados son los niveles de salud, los simbolos son los tratamientos, y acepta una secuencia si termina en `healthy`.
-- **Salida:** tablas de transicion del automata, validacion del plan optimo de A* (aceptado), secuencias rechazadas por no permitirse o no alcanzar la meta, el caso viral (meta inalcanzable, igual que A*) y la planta sana (secuencia vacia aceptada).
+- **Problema:** representar formalmente el conocimiento sobre el estado de salud de una hoja y sobre que secuencias de tratamientos la llevan a estar sana.
+- **Metodo:** la hoja se representa de 3 formas complementarias:
+  - **Numerica:** vector `(verdor, amarillez, proporcion de manchas)` comparado con la hoja sana de referencia mediante distancia euclidiana (a mayor distancia, mas alejada de sana). La funcion `extraer_vector_hoja()` obtiene el vector real de una imagen.
+  - **Simbolica:** hechos (sintomas presentes) + reglas IF-THEN concluyen una sospecha (fungica, viral, plaga).
+  - **Automata:** se construye un DFA a partir de `TRATAMIENTOS` (semana 04); acepta una secuencia si termina en `healthy`.
+- **Salida:** vector numerico de la hoja y su distancia a la referencia sana, la conclusion simbolica, las tablas de transicion del automata, la validacion del plan optimo de A* (aceptado), secuencias rechazadas, el caso viral (meta inalcanzable) y la planta sana (secuencia vacia aceptada).
 - **Relacion con A*:** A* (semana 04) encuentra la mejor secuencia; el automata (semana 07) representa el conocimiento de cuando una secuencia es valida.
 - **Ejecucion:** `python -m src.semana07_representaciones`
 
@@ -92,7 +95,7 @@ plantas_enfermas/
 │   ├── semana03_taxonomia.py       # Taxonomia de IA
 │   ├── semana04_busqueda.py        # Busqueda A* (plan de recuperacion)
 │   ├── semana05_sistema_hibrido.py # Sistema hibrido (reglas + TF-IDF + ML)
-│   ├── semana07_representaciones.py # Representaciones (automata sobre semana 04)
+│   ├── semana07_representaciones.py # Representaciones: numerica + simbolica + automata
 │   └── pipeline.py                 # Pipeline integrada image→prediccion→plan
 ├── main.py                         # Punto de entrada
 ├── requirements.txt
