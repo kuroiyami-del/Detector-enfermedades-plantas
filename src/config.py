@@ -9,3 +9,4 @@ PROCESSED_DIR = DATA_DIR / "processed"
 RANDOM_STATE = 42
 IMG_SIZE = 64
 MODELS_DIR = ROOT / "models"
+ARTIFACTS_DIR = ROOT / "artifacts"

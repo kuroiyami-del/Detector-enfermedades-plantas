@@ -1,0 +1,38 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="d0" for="edge" attr.name="rel" attr.type="string" />
+  <graph edgedefault="directed">
+    <node id="imagen_hoja" />
+    <node id="hoja" />
+    <node id="planta" />
+    <node id="sintoma" />
+    <node id="enfermedad" />
+    <node id="categoria" />
+    <node id="prediccion" />
+    <node id="modelo_red" />
+    <edge source="imagen_hoja" target="hoja">
+      <data key="d0">representa</data>
+    </edge>
+    <edge source="hoja" target="planta">
+      <data key="d0">pertenece</data>
+    </edge>
+    <edge source="hoja" target="sintoma">
+      <data key="d0">presenta</data>
+    </edge>
+    <edge source="sintoma" target="enfermedad">
+      <data key="d0">indica</data>
+    </edge>
+    <edge source="enfermedad" target="categoria">
+      <data key="d0">tiene</data>
+    </edge>
+    <edge source="prediccion" target="categoria">
+      <data key="d0">asigna</data>
+    </edge>
+    <edge source="modelo_red" target="hoja">
+      <data key="d0">reconoce</data>
+    </edge>
+    <edge source="modelo_red" target="prediccion">
+      <data key="d0">produce</data>
+    </edge>
+  </graph>
+</graphml>

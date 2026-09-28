@@ -79,6 +79,16 @@ Los datos se encuentran separados en los archivos CSV dentro de `data/processed/
 - **Relacion con A*:** A* (semana 04) encuentra la mejor secuencia; el automata (semana 07) representa el conocimiento de cuando una secuencia es valida.
 - **Ejecucion:** `python -m src.semana07_representaciones`
 
+### Semana 08 - Red neuronal + evidencia + ontologia
+
+- **Area:** Redes neuronales y representacion del conocimiento.
+- **Problema:** reconocer el estado de salud de una hoja de tomate y dejar evidencia verificable de cada prediccion.
+- **Metodo:** red neuronal **MLP** (perceptron multicapa, `MLPClassifier` con capas de 128 y 64 neuronas) entrenada con las 6 categorias de tomate de PlantVillage (sana, bacteria, tizon, septoria, acaros, moho). Las imagenes se pasan a escala de grises 48x48 (2304 caracteristicas) y se dividen 80/20.
+- **Salida:** accuracy sobre prueba, tabla real-vs-predicha, evidencia de cada prediccion en una base de datos SQLite (`artifacts/evidencia_hojas.db`) y una ontologia (`artifacts/ontologia.graphml`) que describe las relaciones del dominio (imagen -> hoja -> sintoma -> enfermedad).
+- **Artefactos:** `artifacts/red_hojas.pkl` (modelo), `evidencia_hojas.db` (base de datos), `ontologia.graphml` (grafo de conceptos).
+- **Relacion con las semanas previas:** la MLP (semana 08) sustituye a la regresion logistica (semana 02) sobre un subconjunto de 6 clases; la ontologia complementa las representaciones de la semana 07.
+- **Ejecucion:** `python -m src.semana08_red_ontologia`
+
 ## Estructura del proyecto
 
 ```
@@ -96,8 +106,10 @@ plantas_enfermas/
 │   ├── semana04_busqueda.py        # Busqueda A* (plan de recuperacion)
 │   ├── semana05_sistema_hibrido.py # Sistema hibrido (reglas + TF-IDF + ML)
 │   ├── semana07_representaciones.py # Representaciones: numerica + simbolica + automata
+│   ├── semana08_red_ontologia.py    # Red neuronal MLP + evidencia SQLite + ontologia
 │   └── pipeline.py                 # Pipeline integrada image→prediccion→plan
 ├── main.py                         # Punto de entrada
+├── artifacts/                      # Artefactos semana 08 (modelo, BD, ontologia)
 ├── requirements.txt
 └── README.md
 ```
@@ -142,7 +154,7 @@ clase detectada con confianza, taxonomia y plan de recuperacion (A*).
 | `python main.py` | Abre el selector de foto y predice (por defecto) |
 | `python main.py ruta/imagen.jpg` | Predice directamente esa imagen |
 | `python main.py --test` | Predice una imagen de ejemplo del test set (muestra clase real) |
-| `python main.py --semanas` | Ejecuta las 5 semanas por separado |
+| `python main.py --semanas` | Ejecuta las 6 semanas por separado |
 
 ### Ejecutar modulos individuales
 
@@ -153,6 +165,7 @@ python -m src.semana03_taxonomia
 python -m src.semana04_busqueda
 python -m src.semana05_sistema_hibrido
 python -m src.semana07_representaciones
+python -m src.semana08_red_ontologia
 ```
 
 > **Nota:** Los modulos individuales deben ejecutarse con `python -m src.<nombre>` desde la raiz del proyecto. No usar `python src/<nombre>.py` porque los imports no funcionarian.
