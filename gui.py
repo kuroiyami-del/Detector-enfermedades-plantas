@@ -28,7 +28,8 @@ try:
     from src.semana04_busqueda import diagnose_recovery
     from src.semana05_sistema_hibrido import answer
     from src.semana07_representaciones import (
-        validar_secuencia, extraer_vector_hoja, distancia_hoja_sana)
+        validar_secuencia, extraer_vector_hoja, distancia_hoja_sana,
+        representacion_simbolica)
     _PIPELINE_OK = True
 except ImportError:
     _PIPELINE_OK = False
@@ -548,13 +549,15 @@ class App(tk.Tk):
             vector = extraer_vector_hoja(self._img_path)
             distancia = distancia_hoja_sana(vector)
 
+            simbolico = representacion_simbolica(cat)
+
             acciones = [accion for _, accion, _, _ in (plan or [])]
             is_valid, _final, _pasos = validar_secuencia(cat, acciones)
 
             self.after(0, lambda: self._render_report(
                 class_name, confidence, top3,
                 category, cat, plan, total, expanded, is_valid,
-                vector, distancia))
+                vector, distancia, simbolico))
 
         except Exception as exc:
             self.after(0, lambda: self._show_error(str(exc)))
@@ -575,7 +578,7 @@ class App(tk.Tk):
     # --- Render de reporte ---
     def _render_report(self, class_name, confidence, top3,
                        category, cat, plan, total, expanded, is_valid,
-                       vector=None, distancia=None):
+                       vector=None, distancia=None, simbolico=None):
         """Genera el reporte estructurado en el panel de resultados."""
 
         if confidence >= 0.75:
@@ -643,10 +646,34 @@ class App(tk.Tk):
                       "  0 = idéntica a la referencia; a mayor valor,\n"
                       "  más alejada de la hoja sana.\n"))
 
-        # 4. Plan A*
+        # 4. Representacion simbolica (semana 07)
         lines += [
             ("hr",    "\n" + "─" * 55 + "\n"),
-            ("h2",    "§ 4  Plan de Recuperación (A*)\n"),
+            ("h2",    "§ 4  Representación Simbólica de la Salud de la Planta (semana 07)\n"),
+        ]
+        if simbolico is None:
+            lines.append(("value", "no disponible\n"))
+        else:
+            lines.append(("label", "  Hechos observados (etiquetas):  "))
+            lines.append(("mono",  ", ".join(simbolico["hechos"]) + "\n"))
+            lines.append(("h3", "\n  Reglas evaluadas:\n"))
+            for cond, res, aplica in simbolico["reglas"]:
+                marco = "✔" if aplica else "·"
+                lines.append(("mono",
+                              f"  {marco} SI {', '.join(sorted(cond))}\n"))
+                lines.append(("mono", f"      ENTONCES {res}\n"))
+            concl = simbolico["conclusion"]
+            concl_tag = ("healthy" if concl == "planta_sana"
+                         else "warning" if concl != "sin_concluir" else "value")
+            lines += [
+                ("label", "\n  Conclusión simbólica:      "),
+                (concl_tag, f"{simbolico['significado']}  ({concl})\n"),
+            ]
+
+        # 5. Plan A*
+        lines += [
+            ("hr",    "\n" + "─" * 55 + "\n"),
+            ("h2",    "§ 5  Plan de Recuperación (A*)\n"),
         ]
         if cat == "Plantas sanas":
             lines.append(("healthy",
@@ -661,10 +688,10 @@ class App(tk.Tk):
                 lines.append(("mono",
                               f"  {idx:>2}. {accion:<28} (+{step}) → {nxt}\n"))
 
-        # 5. Validacion (Automata)
+        # 6. Validacion (Automata)
         lines += [
             ("hr",    "\n" + "─" * 55 + "\n"),
-            ("h2",    "§ 5  Validación de Secuencia (Autómata)\n"),
+            ("h2",    "§ 6  Validación de Secuencia (Autómata)\n"),
         ]
         if cat == "Plantas sanas":
             lines.append(("healthy",
@@ -679,10 +706,10 @@ class App(tk.Tk):
             lines.append(("danger",
                           "  ✘  Secuencia inválida — el plan no termina en 'healthy'.\n"))
 
-        # 6. Resumen
+        # 7. Resumen
         lines += [
             ("hr",    "\n" + "─" * 55 + "\n"),
-            ("h2",    "§ 6  Resumen Ejecutivo\n"),
+            ("h2",    "§ 7  Resumen Ejecutivo\n"),
             ("label", "  Planta:     "), ("value", f"{class_name}\n"),
             ("label", "  Categoría:  "), (cat_tag, f"{cat}\n"),
             ("label", "  Confianza:  "), (conf_tag, f"{confidence:.1%}\n"),
