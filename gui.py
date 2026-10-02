@@ -21,6 +21,8 @@ from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageTk
 import threading
 
+import numpy as np
+
 # --- Importaciones del pipeline ---
 try:
     from src.semana02_entrenamiento import load_model, predict_single, preprocess_single_image
@@ -33,6 +35,14 @@ try:
     _PIPELINE_OK = True
 except ImportError:
     _PIPELINE_OK = False
+
+# La vision por computador de la semana 09 es opcional: si falta scikit-image
+# la interfaz sigue funcionando y solo se omite la seccion de Canny/Otsu.
+try:
+    from src import semana09_vision
+    _VISION_OK = True
+except ImportError:
+    _VISION_OK = False
 
 # --- Paleta ---
 C = {
@@ -301,6 +311,28 @@ class App(tk.Tk):
 
         _sep(card, C["border"], padx=14, pady=2)
 
+        tk.Label(card, text="visión por computador · semana 09",
+                 font=FONT["caption"], bg=C["bg_header"],
+                 fg=C["fg_mid"], padx=14).pack(anchor="w", pady=(6, 2))
+
+        vision_f = tk.Frame(card, bg=C["bg_header"])
+        vision_f.pack(fill="x", padx=14, pady=(0, 12))
+
+        self._vision_canvases = []
+        self._vision_refs = []
+        for titulo in ("Canny σ=1.0", "Máscara Otsu"):
+            celda = tk.Frame(vision_f, bg=C["bg_header"])
+            celda.pack(side="left", fill="x", expand=True, padx=(0, 8))
+            tk.Label(celda, text=titulo, font=FONT["caption"],
+                     bg=C["bg_header"], fg=C["fg_mid"]).pack(anchor="w")
+            cv = tk.Canvas(celda, width=118, height=104,
+                           bg="#e8f0e8", highlightthickness=0)
+            cv.pack()
+            self._vision_canvases.append(cv)
+            self._place_vision_hint(cv, "—")
+
+        _sep(card, C["border"], padx=14, pady=2)
+
         self._img_meta = tk.Label(
             card, text="Sin imagen seleccionada",
             font=FONT["caption"], bg=C["bg_header"],
@@ -321,6 +353,27 @@ class App(tk.Tk):
                                     self._on_diagnose,
                                     bg=C["accent"], padx=14, pady=7)
         run_btn.pack(side="left")
+
+    def _place_vision_hint(self, canvas, texto):
+        canvas.delete("all")
+        canvas.create_text(59, 52, text=texto, font=FONT["caption"],
+                           fill=C["fg_mid"])
+
+    def _update_vision_previews(self, vision, bordes):
+        """Pinta los bordes Canny y la mascara Otsu de la imagen elegida."""
+        paneles = (
+            np.where(bordes[1.0], 255, 0).astype("uint8"),
+            vision["mascara"].astype("uint8") * 255,
+        )
+        # Las referencias se guardan o Tk libera las imagenes y el canvas queda en blanco.
+        self._vision_refs = []
+        for canvas, arr in zip(self._vision_canvases, paneles):
+            im = Image.fromarray(arr, "L").resize(
+                (118, 104), Image.LANCZOS)
+            ref = ImageTk.PhotoImage(im)
+            canvas.delete("all")
+            canvas.create_image(0, 0, anchor="nw", image=ref)
+            self._vision_refs.append(ref)
 
     def _draw_placeholder(self):
         c = self._img_canvas
@@ -554,15 +607,39 @@ class App(tk.Tk):
             acciones = [accion for _, accion, _, _ in (plan or [])]
             is_valid, _final, _pasos = validar_secuencia(cat, acciones)
 
+            vision, bordes = self._vision_de(self._img_path)
+
             self.after(0, lambda: self._render_report(
                 class_name, confidence, top3,
                 category, cat, plan, total, expanded, is_valid,
-                vector, distancia, simbolico))
+                vector, distancia, simbolico, vision))
 
         except Exception as exc:
             self.after(0, lambda: self._show_error(str(exc)))
         finally:
             self.after(0, self._done_busy)
+
+    def _vision_de(self, image_path):
+        """Canny y Otsu sobre la imagen que eligio el usuario (semana 09).
+
+        Devuelve (vision, bordes). Si la vision no esta disponible devuelve
+        (None, None) y la interfaz sigue funcionando igual.
+        """
+        if not _VISION_OK:
+            return None, None
+        try:
+            vision = semana09_vision.analizar_imagen(image_path)
+            bordes, conteo = semana09_vision.barrido_sigma(vision["gris"])
+            vision["canny"] = conteo
+            self.after(0, lambda v=vision, b=bordes:
+                       self._update_vision_previews(v, b))
+            return vision, bordes
+        except Exception:
+            self.after(0, lambda: self._place_vision_hint(
+                self._vision_canvases[0], "error"))
+            self.after(0, lambda: self._place_vision_hint(
+                self._vision_canvases[1], "error"))
+            return None, None
 
     def _done_busy(self):
         self._busy = False
@@ -578,7 +655,8 @@ class App(tk.Tk):
     # --- Render de reporte ---
     def _render_report(self, class_name, confidence, top3,
                        category, cat, plan, total, expanded, is_valid,
-                       vector=None, distancia=None, simbolico=None):
+                       vector=None, distancia=None, simbolico=None,
+                       vision=None):
         """Genera el reporte estructurado en el panel de resultados."""
 
         if confidence >= 0.75:
@@ -706,10 +784,45 @@ class App(tk.Tk):
             lines.append(("danger",
                           "  ✘  Secuencia inválida — el plan no termina en 'healthy'.\n"))
 
-        # 7. Resumen
+        # 7. Vision por computador (semana 09)
         lines += [
             ("hr",    "\n" + "─" * 55 + "\n"),
-            ("h2",    "§ 7  Resumen Ejecutivo\n"),
+            ("h2",    "§ 7  Visión por Computador (semana 09)\n"),
+        ]
+        if vision is None:
+            lines.append(("value", "  no disponible\n"))
+        else:
+            canny = vision.get("canny", {})
+            resumen = "  ".join(f"σ={s}: {canny[s]}" for s in sorted(canny))
+            lines += [
+                ("label", "  Umbral Otsu (saturación):     "),
+                ("mono",  f"{vision['umbral']:.4f}\n"),
+                ("label", "  Umbral Otsu (escala de grises): "),
+                ("mono",  f"{vision['canales']['gris']:.4f}\n"),
+                ("label", "  Píxeles de borde por σ (Canny): "),
+                ("mono",  f"{resumen}\n"),
+                ("label", "  Regiones segmentadas:         "),
+                ("mono",  f"{vision['total_regiones']}\n"),
+            ]
+            principal = vision["principal"]
+            if principal is None:
+                lines.append(("info",
+                              "  No se halló una región de hoja sobre el área mínima.\n"))
+            else:
+                f_ini, c_ini, f_fin, c_fin = principal["bbox"]
+                lines += [
+                    ("label", "  Hoja principal:               "),
+                    ("mono",  f"área {principal['area']} px "
+                              f"({vision['cobertura']:.1%} de la imagen)\n"),
+                    ("label", "  bbox / centroide / solidez:   "),
+                    ("mono",  f"({f_ini}, {c_ini}, {f_fin}, {c_fin}) / "
+                              f"{principal['centroide']} / {principal['solidez']}\n"),
+                ]
+
+        # 8. Resumen
+        lines += [
+            ("hr",    "\n" + "─" * 55 + "\n"),
+            ("h2",    "§ 8  Resumen Ejecutivo\n"),
             ("label", "  Planta:     "), ("value", f"{class_name}\n"),
             ("label", "  Categoría:  "), (cat_tag, f"{cat}\n"),
             ("label", "  Confianza:  "), (conf_tag, f"{confidence:.1%}\n"),

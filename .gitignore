@@ -4,6 +4,7 @@ __pycache__/
 .venv/
 .ipynb_checkpoints/
 logs/
+artifacts/diagnostico_*.png
 
 data/*
 !data/imagen_proyecto.png

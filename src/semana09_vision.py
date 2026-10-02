@@ -8,7 +8,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from skimage import color, feature, filters, io, measure, segmentation
+from skimage import color, feature, filters, io, measure, morphology, segmentation
 
 from src.config import ARTIFACTS_DIR
 
@@ -22,11 +22,18 @@ SIGMAS = (0.5, 1.0, 2.0, 3.0)
 AREA_MINIMA = 300
 
 
-# Carga la imagen del proyecto como RGB, escala de grises y HSV en rango 0..1.
-def cargar_imagen():
-    rgb = io.imread(RUTA_IMAGEN)
+# Carga una imagen como RGB, escala de grises y HSV en rango 0..1.
+# Acepta cualquier archivo porque tambien la usa el diagnostico con la imagen
+# que sube el usuario: una imagen en escala de grises o con canal alfa se
+# convierte a RGB para que el resto del pipeline sea identico.
+def cargar_imagen(ruta=RUTA_IMAGEN):
+    rgb = io.imread(ruta)
     if np.issubdtype(rgb.dtype, np.integer):
         rgb = rgb.astype(float) / 255.0
+    if rgb.ndim == 2:
+        rgb = np.dstack([rgb] * 3)
+    elif rgb.shape[2] == 4:
+        rgb = color.rgba2rgb(rgb)
     return rgb, color.rgb2gray(rgb), color.rgb2hsv(rgb)
 
 
@@ -131,6 +138,52 @@ def generar_evidencia(rgb, bordes, mascara, etiquetas, conteo, umbral, salida):
     salida.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(salida, dpi=160)
     plt.close(fig)
+
+
+# Cierra los huecos de la mascara y descarta el ruido para que la hoja cuente
+# como una sola region. Sin este paso el Otsu fragmenta la imagen en cientos
+# (143 de media sobre el conjunto de prueba) y el bbox de la region mayor deja de
+# describir la hoja entera.
+def limpiar_mascara(mascara):
+    limpio = morphology.closing(mascara, morphology.disk(3))
+    limpio = morphology.remove_small_holes(limpio, max_size=500)
+    return morphology.remove_small_objects(limpio, max_size=AREA_MINIMA)
+
+
+# Aplica el pipeline de vision a cualquier imagen y devuelve un resumen.
+# Es el punto de entrada que reutiliza el diagnostico para procesar la imagen
+# que sube el usuario, sin depender de data/imagen_proyecto.png.
+def analizar_imagen(ruta, limpiar=True):
+    rgb, gris, hsv = cargar_imagen(ruta)
+    umbral, mascara, canales = segmentar_hoja(gris, hsv)
+    if limpiar:
+        mascara = limpiar_mascara(mascara)
+    etiquetas, total, regiones = analizar_regiones(mascara)
+    principal = regiones[0] if regiones else None
+    return {
+        "ruta": str(ruta),
+        "gris": gris,
+        "mascara": mascara,
+        "etiquetas": etiquetas,
+        "umbral": umbral,
+        "canales": canales,
+        "total_regiones": total,
+        "regiones": regiones,
+        "principal": principal,
+        "cobertura": (principal["area"] / gris.size) if principal else 0.0,
+    }
+
+
+# Panel 2x3 de una imagen arbitraria, para dejar evidencia del diagnostico.
+def generar_panel(ruta, salida, limpiar=False):
+    rgb, gris, hsv = cargar_imagen(ruta)
+    bordes, conteo = barrido_sigma(gris)
+    umbral, mascara, _ = segmentar_hoja(gris, hsv)
+    if limpiar:
+        mascara = limpiar_mascara(mascara)
+    etiquetas, _, _ = analizar_regiones(mascara)
+    generar_evidencia(rgb, bordes, mascara, etiquetas, conteo, umbral, salida)
+    return salida
 
 
 # Ejecuta el pipeline completo e imprime la evidencia numerica.
