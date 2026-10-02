@@ -8,6 +8,7 @@ from src import (
     semana05_sistema_hibrido,
     semana07_representaciones,
     semana08_red_ontologia,
+    semana09_vision,
 )
 
 
@@ -24,6 +25,8 @@ def main():
         semana07_representaciones.run()
         print()
         semana08_red_ontologia.run()
+        print()
+        semana09_vision.run()
         return
 
     pipeline.main()

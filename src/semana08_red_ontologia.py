@@ -1,3 +1,4 @@
+import sys
 import time
 
 import numpy as np
@@ -59,8 +60,46 @@ def cargar_imagenes():
     return X, y, nombres
 
 
+# Devuelve el modelo guardado si existe y es compatible con el codigo actual,
+# o None si hay que entrenarlo. Entrenar la red completa lleva poco mas de hora
+# y media, asi que solo se repite cuando de verdad hace falta.
+def modelo_reutilizable():
+    if not RUTA_MODELO.exists():
+        return None
+
+    try:
+        modelo = joblib.load(RUTA_MODELO)
+    except Exception as error:
+        print(f"[MODELO] No se pudo leer {RUTA_MODELO.name}: {error}")
+        return None
+
+    esperado = TAMANO * TAMANO
+    entradas = getattr(modelo, "n_features_in_", None)
+    salidas = getattr(modelo, "n_outputs_", None)
+    clases = list(getattr(modelo, "classes_", []))
+
+    problemas = []
+    if entradas != esperado:
+        problemas.append(f"esperaba {esperado} caracteristicas, tiene {entradas}")
+    if salidas != len(CLASES):
+        problemas.append(f"esta entrenado para {salidas} clases, "
+                         f"hay {len(CLASES)} carpetas en RAW_DIR")
+    if clases != list(range(len(CLASES))):
+        problemas.append("el orden de clases no coincide con las carpetas de RAW_DIR")
+
+    if problemas:
+        print("[MODELO] El modelo guardado no sirve para el codigo actual:")
+        for problema in problemas:
+            print(f"  - {problema}")
+        return None
+
+    print(f"[MODELO] {RUTA_MODELO.name} es compatible: {salidas} clases, "
+          f"{entradas} caracteristicas, entrenado con {modelo.n_iter_} iteraciones")
+    return modelo
+
+
 # Entrena la red neuronal MLP, valida en prueba y guarda el modelo en artifacts/.
-def entrenar_modelo(X, y, nombres):
+def entrenar_modelo(X, y, nombres, modelo=None):
     inicio = time.time()
     X_train, X_test, y_train, y_test, nombres_train, nombres_test = train_test_split(
         X, y, nombres, test_size=0.20, random_state=RANDOM_STATE, stratify=y
@@ -68,27 +107,31 @@ def entrenar_modelo(X, y, nombres):
     print(f"Entrenamiento: {len(X_train)} | Prueba: {len(X_test)} | "
           f"division en {time.time() - inicio:.1f} s", flush=True)
 
-    print(f"\n[ENTRENO] MLP {CAPAS_OCULTAS} | max_iter={MAX_ITER} | "
-          f"{len(X_train)} muestras x {X_train.shape[1]} caracteristicas",
-          flush=True)
-    inicio = time.time()
-    model = MLPClassifier(hidden_layer_sizes=CAPAS_OCULTAS, max_iter=MAX_ITER,
-                          random_state=RANDOM_STATE, verbose=True)
-    model.fit(X_train, y_train)
-    iteraciones = model.n_iter_
-    print(f"\n[ENTRENO] Termino en {(time.time() - inicio) / 60:.1f} min | "
-          f"iteraciones {iteraciones}/{MAX_ITER}"
-          f"{' (convergio antes del techo)' if iteraciones < MAX_ITER else ' (llego al techo)'}",
-          flush=True)
+    if modelo is not None:
+        print(f"\n[ENTRENO] Se reutiliza {RUTA_MODELO.name} "
+              f"(se entreno con {modelo.n_iter_} iteraciones); no se ejecuta fit()",
+              flush=True)
+    else:
+        print(f"\n[ENTRENO] MLP {CAPAS_OCULTAS} | max_iter={MAX_ITER} | "
+              f"{len(X_train)} muestras x {X_train.shape[1]} caracteristicas",
+              flush=True)
+        inicio = time.time()
+        modelo = MLPClassifier(hidden_layer_sizes=CAPAS_OCULTAS, max_iter=MAX_ITER,
+                               random_state=RANDOM_STATE, verbose=True)
+        modelo.fit(X_train, y_train)
+        iteraciones = modelo.n_iter_
+        print(f"\n[ENTRENO] Termino en {(time.time() - inicio) / 60:.1f} min | "
+              f"iteraciones {iteraciones}/{MAX_ITER}"
+              f"{' (convergio antes del techo)' if iteraciones < MAX_ITER else ' (llego al techo)'}",
+              flush=True)
+        joblib.dump(modelo, RUTA_MODELO)
+        print(f"[ARTEFACTO] Modelo guardado en artifacts/{RUTA_MODELO.name}")
 
-    pred = model.predict(X_test)
+    pred = modelo.predict(X_test)
     acc = accuracy_score(y_test, pred)
     print(f"[MODELO] Accuracy sobre el conjunto de prueba: {acc:.4f}", flush=True)
 
     validar(y_test, pred, nombres_test)
-
-    joblib.dump(model, RUTA_MODELO)
-    print(f"[ARTEFACTO] Modelo guardado en artifacts/{RUTA_MODELO.name}")
     return y_test, pred, nombres_test
 
 
@@ -191,15 +234,29 @@ def crear_ontologia():
 
 
 # Ejecuta el flujo completo: fotos -> prediccion -> evidencia -> ontologia.
-def run():
+def run(forzar_entrenamiento=False):
     print("=" * 70)
     print("SEMANA 08 - RED NEURONAL + EVIDENCIA + ONTOLOGIA")
     print("=" * 70)
     print("  Flujo: foto de hoja -> red neuronal (MLP) -> prediccion")
     print("         -> SQLite (evidencia) -> ontologia (significado)\n")
 
+    if forzar_entrenamiento:
+        print("[MODELO] --force recibido: se reentrena aunque exista un modelo\n")
+        modelo = None
+    else:
+        modelo = modelo_reutilizable()
+
+    if modelo is not None:
+        print("\n" + "!" * 70)
+        print("  SE OMITE EL ENTRENAMIENTO: el modelo guardado es valido.")
+        print("  Reentrenar la red desde cero tarda mas de 90 minutos.")
+        print("  Para hacerlo igual, ejecuta:")
+        print("      python -m src.semana08_red_ontologia --force")
+        print("!" * 70 + "\n")
+
     X, y, nombres = cargar_imagenes()
-    y_test, pred, nombres_test = entrenar_modelo(X, y, nombres)
+    y_test, pred, nombres_test = entrenar_modelo(X, y, nombres, modelo)
     guardar_evidencia(y_test, pred, nombres_test)
     crear_ontologia()
     print("\n[FLUJO] Imagen de hoja -> modelo_red (prediccion) -> "
@@ -211,4 +268,4 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
+    run(forzar_entrenamiento="--force" in sys.argv)
