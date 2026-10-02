@@ -82,12 +82,23 @@ Los datos se encuentran separados en los archivos CSV dentro de `data/processed/
 ### Semana 08 - Red neuronal + evidencia + ontologia
 
 - **Area:** Redes neuronales y representacion del conocimiento.
-- **Problema:** reconocer el estado de salud de una hoja de tomate y dejar evidencia verificable de cada prediccion.
-- **Metodo:** red neuronal **MLP** (perceptron multicapa, `MLPClassifier` con capas de 128 y 64 neuronas) entrenada con las 6 categorias de tomate de PlantVillage (sana, bacteria, tizon, septoria, acaros, moho). Las imagenes se pasan a escala de grises 48x48 (2304 caracteristicas) y se dividen 80/20.
+- **Problema:** reconocer la variedad y estado de salud de una hoja a partir de su imagen y dejar evidencia verificable de cada prediccion.
+- **Metodo:** red neuronal **MLP** (perceptron multicapa, `MLPClassifier` con capas de 128 y 64 neuronas) entrenada con las **38 categorias de PlantVillage** (todas las plantas y sus enfermedades). Las imagenes se pasan a escala de grises 48x48 (2304 caracteristicas) y se dividen 80/20.
 - **Salida:** accuracy sobre prueba, tabla real-vs-predicha, evidencia de cada prediccion en una base de datos SQLite (`artifacts/evidencia_hojas.db`) y una ontologia (`artifacts/ontologia.graphml`) que describe las relaciones del dominio (imagen -> hoja -> sintoma -> enfermedad).
 - **Artefactos:** `artifacts/red_hojas.pkl` (modelo), `evidencia_hojas.db` (base de datos), `ontologia.graphml` (grafo de conceptos).
-- **Relacion con las semanas previas:** la MLP (semana 08) sustituye a la regresion logistica (semana 02) sobre un subconjunto de 6 clases; la ontologia complementa las representaciones de la semana 07.
+- **Relacion con las semanas previas:** la MLP (semana 08) sustituye a la regresion logistica (semana 02); la ontologia complementa las representaciones de la semana 07.
 - **Ejecucion:** `python -m src.semana08_red_ontologia`
+
+### Semana 09 - Reconocimiento de imagenes
+
+- **Area:** Vision por computador (procesamiento de imagenes).
+- **Problema:** transformar una fotografia de hoja en informacion localizable: que pixeles son hoja, donde estan sus limites y cuanta superficie ocupa.
+- **Metodo:** pipeline `caracteristicas -> bordes (Canny) -> umbral (Otsu) -> regiones conectadas` con `scikit-image`. Entrada `data/imagen_proyecto.png` (hoja de tomate con septoria de PlantVillage).
+- **Hallazgo:** el umbral se calcula sobre el canal de **saturacion** y no sobre la escala de grises. En gris la hoja y el fondo se separan solo 0.015 de intensidad y Otsu fragmenta la imagen en 684 regiones; en saturacion el contraste es 0.144 y quedan 14. La guia de clase usa `data.coins()` en gris, por eso la adaptacion al dominio fue necesaria.
+- **Salida:** umbral Otsu, barrido de Canny con cuatro valores de sigma, y las regiones etiquetadas con area, `bbox`, centroide y solidez.
+- **Artefactos:** `artifacts/semana09_vision.png` (panel 2x3: original, tres sigma, mascara y regiones).
+- **Relacion con las semanas previas:** la semana 07 estima manchas con la desviacion global de la imagen (un solo numero para toda la foto); la semana 09 la sustituye por una segmentacion que si ubica y mide. El `bbox` de la hoja sirve como recorte de region de interes antes de clasificar con la red de la semana 08.
+- **Ejecucion:** `python -m src.semana09_vision`
 
 ## Estructura del proyecto
 
@@ -96,6 +107,7 @@ plantas_enfermas/
 ├── data/
 │   ├── raw/PlantVillage-Dataset/raw/color/   # 38 carpetas con imagenes JPG
 │   ├── processed/                             # CSVs y class_map.json
+│   ├── imagen_proyecto.png                    # Imagen de entrada (semana 09)
 │   └── base_conocimiento.txt                  # Base de conocimiento (semana 05)
 ├── src/
 │   ├── __init__.py
@@ -107,9 +119,10 @@ plantas_enfermas/
 │   ├── semana05_sistema_hibrido.py # Sistema hibrido (reglas + TF-IDF + ML)
 │   ├── semana07_representaciones.py # Representaciones: numerica + simbolica + automata
 │   ├── semana08_red_ontologia.py    # Red neuronal MLP + evidencia SQLite + ontologia
+│   ├── semana09_vision.py          # Caracteristicas + Canny + Otsu + regiones
 │   └── pipeline.py                 # Pipeline integrada image→prediccion→plan
 ├── main.py                         # Punto de entrada
-├── artifacts/                      # Artefactos semana 08 (modelo, BD, ontologia)
+├── artifacts/                      # Artefactos semana 08/09 (modelo, BD, ontologia, panel)
 ├── requirements.txt
 └── README.md
 ```
@@ -118,6 +131,8 @@ plantas_enfermas/
 
 - **Python 3.11**
 - **scikit-learn** - Modelos de machine learning y metricas de evaluacion
+- **scikit-image** - Deteccion de bordes (Canny), umbral (Otsu) y regiones conectadas
+- **matplotlib** - Generacion de la evidencia visual (`artifacts/semana09_vision.png`)
 - **Pillow** - Carga y procesamiento de imagenes
 - **numpy** - Operaciones con arreglos numericos
 - **pandas** - Manipulacion de datos (lectura de CSVs)
@@ -166,6 +181,7 @@ python -m src.semana04_busqueda
 python -m src.semana05_sistema_hibrido
 python -m src.semana07_representaciones
 python -m src.semana08_red_ontologia
+python -m src.semana09_vision
 ```
 
 > **Nota:** Los modulos individuales deben ejecutarse con `python -m src.<nombre>` desde la raiz del proyecto. No usar `python src/<nombre>.py` porque los imports no funcionarian.

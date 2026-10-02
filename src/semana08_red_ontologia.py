@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 import sqlite3
 import joblib
@@ -9,26 +11,30 @@ from sklearn.metrics import accuracy_score
 
 from src.config import RAW_DIR, ARTIFACTS_DIR, RANDOM_STATE
 
-# 6 categorias del dominio de la hoja de tomate: nombre y carpeta en PlantVillage.
-CLASES = [
-    ("healthy", "Tomato___healthy"),
-    ("bacterial_spot", "Tomato___Bacterial_spot"),
-    ("late_blight", "Tomato___Late_blight"),
-    ("septoria", "Tomato___Septoria_leaf_spot"),
-    ("spider_mites", "Tomato___Spider_mites Two-spotted_spider_mite"),
-    ("leaf_mold", "Tomato___Leaf_Mold"),
-]
+# Todas las clases de PlantVillage: cada carpeta de RAW_DIR es una categoria.
+CLASES = sorted(carpeta.name for carpeta in RAW_DIR.iterdir() if carpeta.is_dir())
 TAMANO = 48
+# Cada cuantas imagenes se informa el avance de la carga.
+PASO_PROGRESO = 5000
+# Arquitectura y techo de iteraciones de la red; ambos se reportan al terminar.
+CAPAS_OCULTAS = (128, 64)
+MAX_ITER = 1500
 ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
 RUTA_MODELO = ARTIFACTS_DIR / "red_hojas.pkl"
 RUTA_DB = ARTIFACTS_DIR / "evidencia_hojas.db"
 RUTA_ONTOLOGIA = ARTIFACTS_DIR / "ontologia.graphml"
 
 
-# Lee las fotos de tomate, las pasa a gris 48x48 y las convierte en listas de numeros.
+# Lee las fotos de todas las plantas, las pasa a gris 48x48 y las convierte en listas de numeros.
 def cargar_imagenes():
+    total = sum(1 for carpeta in CLASES
+                for _ in (RAW_DIR / carpeta).glob("*.jpg"))
+    print(f"Clases: {len(CLASES)} | Imagenes a cargar: {total}", flush=True)
+    print(f"Clases: {CLASES}", flush=True)
+
     X, y, nombres = [], [], []
-    for clase_id, (clase, carpeta) in enumerate(CLASES):
+    inicio = time.time()
+    for clase_id, carpeta in enumerate(CLASES):
         for imagen in sorted((RAW_DIR / carpeta).glob("*.jpg")):
             with Image.open(imagen) as im:
                 pixeles = (
@@ -37,28 +43,47 @@ def cargar_imagenes():
                 )
             X.append(pixeles)
             y.append(clase_id)
-            nombres.append(f"{clase}/{imagen.name}")
+            nombres.append(f"{carpeta}/{imagen.name}")
+            if len(X) % PASO_PROGRESO == 0:
+                transcurrido = time.time() - inicio
+                velocidad = len(X) / transcurrido
+                restante = (total - len(X)) / velocidad
+                print(f"  cargando... {len(X)}/{total} | "
+                      f"{transcurrido / 60:.1f} min | {velocidad:.0f} img/s | "
+                      f"faltan ~{restante / 60:.1f} min", flush=True)
     X = np.array(X)
     y = np.array(y)
-    print(f"Imagenes cargadas: {X.shape[0]} | Caracteristicas por imagen: {X.shape[1]}")
-    print(f"Clases: {[c for c, _ in CLASES]}")
+    print(f"Imagenes cargadas: {X.shape[0]} | "
+          f"Caracteristicas por imagen: {X.shape[1]} | "
+          f"{(time.time() - inicio) / 60:.1f} min", flush=True)
     return X, y, nombres
 
 
 # Entrena la red neuronal MLP, valida en prueba y guarda el modelo en artifacts/.
 def entrenar_modelo(X, y, nombres):
+    inicio = time.time()
     X_train, X_test, y_train, y_test, nombres_train, nombres_test = train_test_split(
         X, y, nombres, test_size=0.20, random_state=RANDOM_STATE, stratify=y
     )
-    print(f"Entrenamiento: {len(X_train)} | Prueba: {len(X_test)}")
+    print(f"Entrenamiento: {len(X_train)} | Prueba: {len(X_test)} | "
+          f"division en {time.time() - inicio:.1f} s", flush=True)
 
-    model = MLPClassifier(hidden_layer_sizes=(128, 64), max_iter=1500,
-                          random_state=RANDOM_STATE)
+    print(f"\n[ENTRENO] MLP {CAPAS_OCULTAS} | max_iter={MAX_ITER} | "
+          f"{len(X_train)} muestras x {X_train.shape[1]} caracteristicas",
+          flush=True)
+    inicio = time.time()
+    model = MLPClassifier(hidden_layer_sizes=CAPAS_OCULTAS, max_iter=MAX_ITER,
+                          random_state=RANDOM_STATE, verbose=True)
     model.fit(X_train, y_train)
+    iteraciones = model.n_iter_
+    print(f"\n[ENTRENO] Termino en {(time.time() - inicio) / 60:.1f} min | "
+          f"iteraciones {iteraciones}/{MAX_ITER}"
+          f"{' (convergio antes del techo)' if iteraciones < MAX_ITER else ' (llego al techo)'}",
+          flush=True)
 
     pred = model.predict(X_test)
     acc = accuracy_score(y_test, pred)
-    print(f"[MODELO] Accuracy sobre el conjunto de prueba: {acc:.4f}")
+    print(f"[MODELO] Accuracy sobre el conjunto de prueba: {acc:.4f}", flush=True)
 
     validar(y_test, pred, nombres_test)
 
@@ -72,14 +97,17 @@ def validar(y_test, pred, nombres_test):
     print("\n[VALIDACION] Real vs Predicha (primeras 12 muestras de prueba):")
     for nombre, real, p in zip(nombres_test[:12], y_test[:12], pred[:12]):
         marca = "OK" if real == p else "X"
-        print(f"  {nombre:<30} real={CLASES[real][0]:<14} pred={CLASES[p][0]:<14} {marca}")
+        print(f"  {nombre:<38} real={CLASES[real]:<26} pred={CLASES[p]:<26} {marca}")
 
-    print("\n[VALIDACION] Accuracy por clase:")
-    for clase_id, (clase, _) in enumerate(CLASES):
+    print("\n[VALIDACION] Peores clases (menor accuracy):")
+    por_clase = []
+    for clase_id, clase in enumerate(CLASES):
         mascara = y_test == clase_id
         if mascara.sum() > 0:
-            por_clase = accuracy_score(y_test[mascara], pred[mascara])
-            print(f"  {clase:<16} acc={por_clase:.2f}  (n={int(mascara.sum())})")
+            acc = accuracy_score(y_test[mascara], pred[mascara])
+            por_clase.append((acc, clase, int(mascara.sum())))
+    for acc, clase, n in sorted(por_clase)[:6]:
+        print(f"  {clase:<38} acc={acc:.2f}  (n={n})")
 
 
 # Guarda cada prediccion en la base SQLite y muestra consultas de evidencia.
@@ -96,7 +124,7 @@ def guardar_evidencia(y_test, pred, nombres_test):
             "fecha TEXT DEFAULT (datetime('now','localtime')))"
         )
         filas = [
-            (nombre, CLASES[real][0], CLASES[p][0], int(real == p))
+            (nombre, CLASES[real], CLASES[p], int(real == p))
             for nombre, real, p in zip(nombres_test, y_test, pred)
         ]
         con.executemany(
@@ -118,12 +146,12 @@ def guardar_evidencia(y_test, pred, nombres_test):
         ):
             print(f"  {fila}")
 
-        print("\n[EVIDENCIA] Consulta de una enfermedad especifica:")
+        print("\n[EVIDENCIA] Conteo de predicciones por clase (primeras 5):")
         for fila in con.execute(
-            "SELECT COUNT(*), SUM(correcta) FROM predicciones "
-            "WHERE categoria_real = 'late_blight'"
+            "SELECT categoria_real, COUNT(*), SUM(correcta) "
+            "FROM predicciones GROUP BY categoria_real ORDER BY categoria_real LIMIT 5"
         ):
-            print(f"  late_blight: total={fila[0]} correctas={fila[1]}")
+            print(f"  {fila[0]:<38} total={int(fila[1]):<5} correctas={fila[2]}")
 
 
 # Crea el grafo de conceptos del dominio y lo guarda como ontologia en GraphML.
@@ -146,6 +174,11 @@ def crear_ontologia():
     G.add_nodes_from(conceptos)
     for origen, destino, rel in relaciones:
         G.add_edge(origen, destino, rel=rel)
+
+    # Cada clase de PlantVillage es un nodo hoja de la ontologia.
+    for clase in CLASES:
+        G.add_node(clase)
+        G.add_edge("categoria", clase, rel="incluye")
 
     nx.write_graphml(G, RUTA_ONTOLOGIA)
 

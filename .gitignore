@@ -3,5 +3,7 @@ __pycache__/
 *.pyc
 .venv/
 .ipynb_checkpoints/
+logs/
 
-data/
+data/*
+!data/imagen_proyecto.png
