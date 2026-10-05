@@ -5,7 +5,9 @@ __pycache__/
 .ipynb_checkpoints/
 logs/
 artifacts/diagnostico_*.png
+artifacts/web_semana09_panel.png
 
 data/*
 !data/imagen_proyecto.png
 AI_CODING_RULES.md
+venv/

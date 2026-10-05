@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PlantAI — Diagnóstico Botánico</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --color-cream-paper:#f9f5f1;
+  --color-ink-black:#222222;
+  --color-golden-olive:#bfb33b;
+  --color-dusty-lavender:#e8d1eb;
+  --color-deep-teal:#025050;
+
+  --font-chromatica:'Space Grotesk',ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --font-hellenictypewriter:'JetBrains Mono','IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+
+  --text-caption:14px; --leading-caption:1.6;
+  --text-body:16px; --leading-body:1.6;
+  --text-subheading:20px; --leading-subheading:1.43;
+  --text-heading-sm:24px; --leading-heading-sm:1.33;
+  --text-heading:28px; --leading-heading:1.25;
+  --text-heading-lg:36px; --leading-heading-lg:1.14;
+
+  --spacing-16:16px; --spacing-32:32px; --spacing-48:48px;
+  --spacing-64:64px; --spacing-152:152px;
+
+  --page-max-width:1200px;
+  --section-gap:64px;
+  --card-padding:48px;
+  --element-gap:16px;
+
+  --shadow-subtle:rgb(191,179,59) 6px 6px 0px 0px;
+  --wavy:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='6' viewBox='0 0 24 6'%3E%3Cpath d='M0 3 Q3 0 6 3 T12 3 T18 3 T24 3' fill='none' stroke='%23e8d1eb' stroke-width='2'/%3E%3C/svg%3E");
+}
+
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--color-cream-paper);
+  color:var(--color-ink-black);
+  font-family:var(--font-chromatica);
+  font-size:var(--text-body);
+  line-height:var(--leading-body);
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4{margin:0;font-weight:500;}
+a{color:inherit;}
+button{font-family:inherit;}
+
+.wrap{max-width:var(--page-max-width);margin:0 auto;padding:0 var(--spacing-32);}
+
+/* ---------- Announcement banner ---------- */
+.banner{
+  display:flex;align-items:center;justify-content:center;gap:12px;
+  padding:8px 16px;font-family:var(--font-hellenictypewriter);
+  font-size:var(--text-caption);font-style:italic;color:var(--color-ink-black);
+}
+.banner svg{width:16px;height:16px;flex:none;}
+
+/* ---------- Navigation ---------- */
+.nav{
+  position:relative;display:flex;align-items:center;justify-content:space-between;
+  gap:16px;padding:24px var(--spacing-32);
+  max-width:var(--page-max-width);margin:0 auto;
+}
+.nav-links{display:flex;gap:24px;}
+.nav-links a{
+  font-size:var(--text-body);text-decoration:none;position:relative;padding-bottom:6px;
+  background:var(--wavy) repeat-x left bottom;background-size:24px 6px;
+}
+.logo{
+  font-family:var(--font-hellenictypewriter);font-weight:700;
+  font-size:var(--text-subheading);letter-spacing:0.06em;text-transform:uppercase;
+  text-align:center;position:absolute;left:50%;transform:translateX(-50%);
+}
+.ghost-btn{
+  background:none;border:1px solid var(--color-ink-black);border-radius:0;
+  padding:12px 32px;text-transform:uppercase;font-size:var(--text-body);
+  letter-spacing:0.04em;cursor:pointer;display:inline-flex;align-items:center;gap:8px;
+  color:var(--color-ink-black);transition:background .12s ease;
+}
+.ghost-btn:hover{background:var(--color-dusty-lavender);}
+.ghost-btn svg{width:16px;height:16px;}
+
+/* ---------- Hero shelves ---------- */
+.hero{margin-top:8px;}
+.shelf{
+  position:relative;width:100%;height:132px;overflow:hidden;
+  background:var(--color-golden-olive);border-top:2px solid var(--color-ink-black);
+  border-bottom:2px solid var(--color-ink-black);
+}
+.shelf + .shelf{border-top:none;}
+.shelf .art{
+  position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:space-around;
+  padding:0 4%;opacity:.85;pointer-events:none;
+}
+.shelf .art svg{height:78%;width:auto;flex:none;}
+.shelf .word{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-chromatica);font-weight:700;color:var(--color-ink-black);
+  font-size:clamp(48px,10vw,110px);line-height:0.89;letter-spacing:0.02em;
+}
+.shelf-wrap{box-shadow:var(--shadow-subtle);margin:0 0 8px;}
+
+/* side tab */
+.hero-relative{position:relative;}
+.side-tab{
+  position:absolute;left:0;top:50%;transform:translateY(-50%) rotate(-90deg);
+  transform-origin:left center;background:var(--color-dusty-lavender);
+  color:var(--color-ink-black);font-size:var(--text-caption);text-transform:uppercase;
+  letter-spacing:0.14em;padding:8px 22px;z-index:5;white-space:nowrap;
+}
+
+/* ---------- Sections ---------- */
+section{padding:var(--section-gap) 0;}
+.section-title{
+  font-family:var(--font-hellenictypewriter);font-weight:500;
+  font-size:var(--text-heading);line-height:var(--leading-heading);margin-bottom:8px;
+}
+.section-kicker{
+  font-family:var(--font-hellenictypewriter);font-size:var(--text-caption);
+  text-transform:uppercase;letter-spacing:0.16em;color:var(--color-deep-teal);
+  margin-bottom:12px;
+}
+.editorial{display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-32);align-items:center;}
+.editorial .illus{display:flex;justify-content:center;}
+.editorial .illus svg{width:min(360px,90%);height:auto;}
+.editorial p{max-width:52ch;}
+
+/* ---------- Workbench ---------- */
+.workbench{
+  display:grid;grid-template-columns:340px 1fr;gap:var(--spacing-32);
+  align-items:start;
+}
+.card{
+  background:var(--color-cream-paper);border:1px solid var(--color-ink-black);
+  border-radius:0;
+}
+.card.gold{border:2px solid var(--color-golden-olive);box-shadow:var(--shadow-subtle);}
+.card-head{
+  font-family:var(--font-hellenictypewriter);font-weight:500;
+  font-size:var(--text-subheading);padding:20px 24px;
+  border-bottom:1px solid var(--color-ink-black);display:flex;
+  align-items:center;justify-content:space-between;gap:12px;
+}
+.card-body{padding:24px;}
+
+.dropzone{
+  border:1px dashed var(--color-ink-black);background:var(--color-dusty-lavender);
+  min-height:220px;display:flex;align-items:center;justify-content:center;
+  text-align:center;cursor:pointer;padding:16px;position:relative;overflow:hidden;
+}
+.dropzone img{max-width:100%;max-height:320px;display:block;object-fit:contain;}
+.dropzone .ph{display:flex;flex-direction:column;align-items:center;gap:10px;color:var(--color-deep-teal);}
+.dropzone .ph svg{width:56px;height:56px;}
+.dropzone.dragover{background:var(--color-golden-olive);}
+.meta{font-family:var(--font-hellenictypewriter);font-size:var(--text-caption);
+  color:var(--color-deep-teal);margin-top:12px;word-break:break-word;}
+
+.field{margin-top:20px;}
+.field label{
+  display:block;font-family:var(--font-hellenictypewriter);font-size:var(--text-caption);
+  text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;
+}
+textarea{
+  width:100%;min-height:96px;resize:vertical;background:var(--color-cream-paper);
+  border:1px solid var(--color-ink-black);border-radius:0;padding:12px;
+  font-family:var(--font-chromatica);font-size:var(--text-body);color:var(--color-ink-black);
+}
+textarea:focus{outline:2px solid var(--color-golden-olive);outline-offset:1px;}
+.btn-row{display:flex;flex-direction:column;gap:12px;margin-top:20px;}
+.btn{
+  border-radius:0;border:1px solid var(--color-ink-black);cursor:pointer;
+  padding:14px 20px;font-size:var(--text-body);text-transform:uppercase;
+  letter-spacing:0.04em;display:inline-flex;align-items:center;justify-content:center;
+  gap:8px;background:none;color:var(--color-ink-black);transition:background .12s ease;
+}
+.btn.gold{background:var(--color-golden-olive);}
+.btn.gold:hover{background:#cec24a;}
+.btn.teal{background:var(--color-deep-teal);color:var(--color-cream-paper);border-color:var(--color-deep-teal);}
+.btn.teal:hover{background:#036b6b;}
+.btn.ghost:hover{background:var(--color-dusty-lavender);}
+.btn:disabled{opacity:.45;cursor:not-allowed;}
+.status{
+  font-family:var(--font-hellenictypewriter);font-size:var(--text-caption);
+  margin-top:16px;min-height:20px;color:var(--color-deep-teal);
+}
+.status.error{color:#9a1b1b;}
+.status.ok{color:var(--color-deep-teal);}
+
+/* ---------- Results ---------- */
+.results-layout{display:grid;grid-template-columns:150px 1fr;gap:0;min-height:520px;}
+.weeks-rail{
+  border-right:1px solid var(--color-ink-black);padding:16px 0;
+  display:flex;flex-direction:column;gap:2px;background:var(--color-cream-paper);
+}
+.week-tab{
+  border:none;background:none;text-align:left;cursor:pointer;
+  font-family:var(--font-chromatica);font-size:var(--text-body);
+  padding:14px 18px;color:var(--color-ink-black);border-left:4px solid transparent;
+}
+.week-tab .n{font-family:var(--font-hellenictypewriter);font-size:var(--text-caption);
+  text-transform:uppercase;letter-spacing:0.08em;display:block;color:var(--color-deep-teal);}
+.week-tab:hover{background:var(--color-dusty-lavender);}
+.week-tab.active{background:var(--color-dusty-lavender);border-left-color:var(--color-golden-olive);}
+.week-tab .badge{display:inline-block;font-family:var(--font-hellenictypewriter);
+  font-size:11px;text-transform:uppercase;letter-spacing:.08em;margin-top:4px;
+  color:var(--color-deep-teal);}
+.result-pane{padding:32px 40px;overflow-x:auto;}
+
+.big-result{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-end;margin-bottom:8px;}
+.big-result .label{font-family:var(--font-hellenictypewriter);font-size:var(--text-caption);
+  text-transform:uppercase;letter-spacing:.1em;color:var(--color-deep-teal);}
+.big-result .value{font-size:var(--text-heading-sm);font-weight:500;}
+.mono{font-family:var(--font-hellenictypewriter);}
+.muted{color:var(--color-deep-teal);}
+.tiny{font-size:var(--text-caption);}
+
+.confbar{height:14px;border:1px solid var(--color-ink-black);background:var(--color-cream-paper);width:100%;max-width:340px;margin-top:8px;}
+.confbar > span{display:block;height:100%;background:var(--color-golden-olive);}
+.chip{
+  display:inline-block;padding:4px 10px;background:var(--color-dusty-lavender);
+  color:var(--color-deep-teal);font-family:var(--font-hellenictypewriter);
+  font-size:var(--text-caption);margin:2px 4px 2px 0;
+}
+.divider{height:1px;background:var(--color-ink-black);opacity:.25;margin:24px 0;}
+.subhead{font-family:var(--font-hellenictypewriter);font-size:var(--text-subheading);
+  margin:28px 0 12px;}
+.subhead:first-child{margin-top:0;}
+
+table{width:100%;border-collapse:collapse;font-family:var(--font-hellenictypewriter);font-size:13px;}
+th,td{border-bottom:1px solid rgba(34,34,34,.25);padding:8px 10px;text-align:left;vertical-align:top;}
+th{background:var(--color-dusty-lavender);font-weight:500;text-transform:uppercase;
+  letter-spacing:.06em;font-size:12px;}
+tr.hit td{background:rgba(191,179,59,.25);}
+.tag{font-family:var(--font-hellenictypewriter);font-size:12px;padding:2px 8px;display:inline-block;}
+.tag.ok{background:var(--color-deep-teal);color:var(--color-cream-paper);}
+.tag.no{background:var(--color-dusty-lavender);color:var(--color-deep-teal);}
+
+.img-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-top:12px;}
+.img-grid figure{margin:0;border:1px solid var(--color-ink-black);}
+.img-grid img{width:100%;display:block;}
+.img-grid figcaption{font-family:var(--font-hellenictypewriter);font-size:12px;
+  padding:6px 8px;border-top:1px solid var(--color-ink-black);}
+
+.empty{
+  display:flex;align-items:center;justify-content:center;height:100%;
+  min-height:360px;text-align:center;flex-direction:column;gap:16px;
+}
+.empty svg{width:120px;height:auto;}
+.empty p{max-width:40ch;font-family:var(--font-hellenictypewriter);font-size:var(--text-caption);}
+
+/* ---------- Footer ---------- */
+footer{border-top:2px solid var(--color-ink-black);margin-top:var(--section-gap);}
+.footer-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:var(--spacing-32);padding:var(--spacing-64) 0;}
+.footer-grid h4{font-family:var(--font-hellenictypewriter);font-size:var(--text-caption);
+  text-transform:uppercase;letter-spacing:.14em;margin-bottom:16px;}
+.footer-links{display:flex;flex-direction:column;gap:12px;}
+.footer-links a{font-size:var(--text-body);text-decoration:none;width:max-content;
+  padding-bottom:5px;background:var(--wavy) repeat-x left bottom;background-size:24px 6px;}
+.footer-note{font-family:var(--font-hellenictypewriter);font-size:var(--text-caption);
+  color:var(--color-deep-teal);max-width:44ch;}
+
+/* ---------- Loading ---------- */
+.overlay{position:fixed;inset:0;background:rgba(249,245,241,.85);display:none;
+  align-items:center;justify-content:center;z-index:50;flex-direction:column;gap:16px;}
+.overlay.on{display:flex;}
+.spinner{width:54px;height:54px;border:4px solid var(--color-dusty-lavender);
+  border-top-color:var(--color-golden-olive);border-radius:50%;animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.overlay p{font-family:var(--font-hellenictypewriter);font-size:var(--text-caption);}
+
+@media (max-width:900px){
+  .editorial,.workbench{grid-template-columns:1fr;}
+  .nav-links{display:none;}
+  .results-layout{grid-template-columns:1fr;}
+  .weeks-rail{flex-direction:row;flex-wrap:wrap;border-right:none;
+    border-bottom:1px solid var(--color-ink-black);}
+  .week-tab{border-left:none;border-bottom:4px solid transparent;}
+  .week-tab.active{border-left:none;border-bottom-color:var(--color-golden-olive);}
+  .side-tab{display:none;}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ ANNOUNCEMENT ============ -->
+<div class="banner">
+  <svg viewBox="0 0 24 24" fill="none" stroke="#222" stroke-width="1.6"><path d="M12 22V12M12 12C12 7 8 4 3 4c0 5 4 8 9 8zM12 12c0-5 4-8 9-8-5 0-9 3-9 8z"/></svg>
+  Diagnóstico botánico con inteligencia artificial · seis semanas de conocimiento en una sola página
+  <svg viewBox="0 0 24 24" fill="none" stroke="#222" stroke-width="1.6"><path d="M12 22V12M12 12C12 7 8 4 3 4c0 5 4 8 9 8zM12 12c0-5 4-8 9-8-5 0-9 3-9 8z"/></svg>
+</div>
+
+<!-- ============ NAV ============ -->
+<nav class="nav">
+  <div class="nav-links">
+    <a href="#diagnostico">Diagnóstico</a>
+    <a href="#semanas">Semanas</a>
+    <a href="#proyecto">Proyecto</a>
+  </div>
+  <div class="logo">PlantAI</div>
+  <button class="ghost-btn" id="navConsult">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+    Consultar
+  </button>
+</nav>
+
+<!-- ============ HERO ============ -->
+<div class="hero hero-relative">
+  <span class="side-tab">Diagnóstico Vegetal</span>
+  <div class="shelf-wrap">
+    <div class="shelf">
+      <div class="art">
+        <svg viewBox="0 0 60 90" fill="none" stroke="#222" stroke-width="1.8"><path d="M22 88h16l-2-22H24z"/><path d="M30 66V40"/><path d="M30 52c-8 0-13-5-13-12 7 0 13 5 13 12zM30 52c8 0 13-5 13-12-7 0-13 5-13 12zM30 40c-5-2-7-7-6-12 5 1 8 5 8 10z"/></svg>
+        <svg viewBox="0 0 60 90" fill="none" stroke="#222" stroke-width="1.8"><rect x="14" y="60" width="32" height="26"/><path d="M20 60V42h20v18M25 60v-9M35 60v-9"/></svg>
+        <svg viewBox="0 0 48 90" fill="none" stroke="#222" stroke-width="1.8"><path d="M16 46h16l4 42H12z"/><path d="M14 46c-4-8-2-18 10-18s14 10 10 18z"/><path d="M24 2v6M18 6l-3-4M30 6l3-4"/></svg>
+        <svg viewBox="0 0 60 90" fill="none" stroke="#222" stroke-width="1.8"><path d="M30 88V36"/><path d="M30 60c-10 0-16-6-16-15 9 0 16 6 16 15zM30 60c10 0 16-6 16-15-9 0-16 6-16 15z"/><path d="M30 36c-6-3-8-9-6-15 6 2 9 7 6 15z"/></svg>
+        <svg viewBox="0 0 60 90" fill="none" stroke="#222" stroke-width="1.8"><rect x="18" y="52" width="24" height="34"/><path d="M14 52h32M22 52V40h16v12"/><path d="M30 40V16M30 24c-7 0-11-4-11-10 6 0 11 4 11 10zM30 24c7 0 11-4 11-10-6 0-11 4-11 10z"/></svg>
+        <svg viewBox="0 0 60 90" fill="none" stroke="#222" stroke-width="1.8"><path d="M30 88V30"/><path d="M30 44c-11 0-18-7-18-17 10 0 18 7 18 17zM30 44c11 0 18-7 18-17-10 0-18 7-18 17zM30 66c-11 0-18-7-18-17 10 0 18 7 18 17zM30 66c11 0 18-7 18-17-10 0-18 7-18 17z"/></svg>
+      </div>
+      <div class="word">PLANT</div>
+    </div>
+    <div class="shelf">
+      <div class="art">
+        <svg viewBox="0 0 60 90" fill="none" stroke="#222" stroke-width="1.8"><path d="M24 88h12l-2-26H26z"/><path d="M30 62V34M30 48c-8 0-13-5-13-12 7 0 13 5 13 12zM30 48c8 0 13-5 13-12-7 0-13 5-13 12z"/></svg>
+        <svg viewBox="0 0 60 90" fill="none" stroke="#222" stroke-width="1.8"><path d="M30 88V40"/><path d="M30 54c-9 0-15-6-15-14 8 0 15 6 15 14zM30 54c9 0 15-6 15-14-8 0-15 6-15 14z"/><circle cx="30" cy="14" r="8"/></svg>
+        <svg viewBox="0 0 60 90" fill="none" stroke="#222" stroke-width="1.8"><rect x="16" y="56" width="28" height="30"/><path d="M20 56V44h20v12M30 44V14M30 22c-7 0-11-4-11-10 6 0 11 4 11 10zM30 22c7 0 11-4 11-10-6 0-11 4-11 10z"/></svg>
+        <svg viewBox="0 0 48 90" fill="none" stroke="#222" stroke-width="1.8"><path d="M14 50h20l3 38H11z"/><path d="M12 50c-3-9 0-20 12-20s15 11 12 20z"/><path d="M24 8v8"/></svg>
+        <svg viewBox="0 0 60 90" fill="none" stroke="#222" stroke-width="1.8"><path d="M22 88h16l-3-30H25z"/><path d="M30 58V28M30 42c-8 0-13-5-13-12 7 0 13 5 13 12zM30 42c8 0 13-5 13-12-7 0-13 5-13 12zM30 34c-5-2-6-7-5-12 5 1 7 6 5 12z"/></svg>
+        <svg viewBox="0 0 60 90" fill="none" stroke="#222" stroke-width="1.8"><path d="M30 88V32"/><path d="M30 46c-12 0-19-7-19-18 11 0 19 7 19 18zM30 46c12 0 19-7 19-18-11 0-19 7-19 18zM30 70c-12 0-19-7-19-18 11 0 19 7 19 18zM30 70c12 0 19-7 19-18-11 0-19 7-19 18z"/></svg>
+      </div>
+      <div class="word">AI</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ EDITORIAL INTRO ============ -->
+<section class="wrap" id="proyecto">
+  <div class="editorial">
+    <div class="illus">
+      <svg viewBox="0 0 320 320" fill="none" stroke="#222" stroke-width="2">
+        <path d="M160 300V150" />
+        <path d="M160 200c-45 0-72-28-72-70 40 0 72 28 72 70z" fill="#bfb33b" stroke="#222"/>
+        <path d="M160 200c45 0 72-28 72-70-40 0-72 28-72 70z" fill="#bfb33b" stroke="#222"/>
+        <path d="M160 150c-28-12-40-44-30-74 26 8 40 40 30 74z" fill="#bfb33b" stroke="#222"/>
+        <path d="M160 150c28-12 40-44 30-74-26 8-40 40-30 74z" fill="#bfb33b" stroke="#222"/>
+        <path d="M160 40v70" />
+        <path d="M150 300h20" />
+      </svg>
+    </div>
+    <div>
+      <div class="section-kicker">Conozca su planta</div>
+      <h2 class="section-title">Diagnóstico editorial para cada hoja</h2>
+      <p>Seleccione una imagen y el sistema clasifica la enfermedad, ubica su categoría taxonómica y
+      traza el plan de recuperación de menor costo. Cada paso queda registrado como una semana de
+      trabajo: representaciones, red neuronal, visión por computador y sistema híbrido de consultas.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ WORKBENCH ============ -->
+<section class="wrap" id="diagnostico">
+  <div class="section-kicker">Mesa de trabajo</div>
+  <h2 class="section-title" style="margin-bottom:32px">Inicio del diagnóstico</h2>
+
+  <div class="workbench">
+    <!-- Input card -->
+    <div class="card gold">
+      <div class="card-head">Nueva consulta</div>
+      <div class="card-body">
+        <div class="dropzone" id="dropzone" tabindex="0">
+          <div class="ph" id="dropPlaceholder">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5L5 20"/></svg>
+            <span class="tiny mono">Seleccionar imagen</span>
+            <span class="tiny mono muted">o arrastrar y soltar</span>
+          </div>
+          <img id="preview" alt="Imagen seleccionada" style="display:none">
+        </div>
+        <input type="file" id="fileInput" accept="image/*" style="display:none">
+        <div class="meta" id="fileMeta">Sin imagen seleccionada</div>
+
+        <div class="field">
+          <label for="symptoms">Síntomas (texto)</label>
+          <textarea id="symptoms" placeholder="Ej: manchas marrones y moho en las hojas del tomate..."></textarea>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn gold" id="btnDiagnose">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2l2.5 6.5L21 11l-6.5 2.5L12 20l-2.5-6.5L3 11l6.5-2.5z"/></svg>
+            Diagnosticar
+          </button>
+          <button class="btn teal" id="btnConsult">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h16v12H8l-4 4z"/></svg>
+            Consultar síntomas
+          </button>
+          <button class="btn ghost" id="btnClear">Limpiar resultado</button>
+        </div>
+        <div class="status" id="status"></div>
+      </div>
+    </div>
+
+    <!-- Results card -->
+    <div class="card gold" id="semanas">
+      <div class="card-head">
+        <span>Resultados</span>
+        <span class="mono tiny muted" id="resultsMode">—</span>
+      </div>
+      <div class="results-layout">
+        <div class="weeks-rail" id="weeksRail"></div>
+        <div class="result-pane" id="resultPane">
+          <div class="empty">
+            <svg viewBox="0 0 320 260" fill="none" stroke="#222" stroke-width="2">
+              <path d="M160 240V140"/>
+              <path d="M160 190c-40 0-64-25-64-62 36 0 64 25 64 62z" fill="#bfb33b"/>
+              <path d="M160 190c40 0 64-25 64-62-36 0-64 25-64 62z" fill="#bfb33b"/>
+              <path d="M160 140c-24-10-34-38-26-64 22 7 34 34 26 64z" fill="#bfb33b"/>
+              <path d="M160 140c24-10 34-38 26-64-22 7-34 34-26 64z" fill="#bfb33b"/>
+            </svg>
+            <p>Seleccione una imagen y pulse <strong>Diagnosticar</strong>, o escriba los síntomas y pulse <strong>Consultar síntomas</strong>. Cada semana aparecerá en la barra lateral.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="wrap footer-grid">
+    <div>
+      <h4>PlantAI</h4>
+      <p class="footer-note">Diagnóstico de enfermedades en plantas con clasificación, búsqueda A*,
+      representaciones del conocimiento, red neuronal y visión por computador.</p>
+    </div>
+    <div>
+      <h4>Semanas</h4>
+      <div class="footer-links">
+        <a href="#semanas">Semana 02 · Entrenamiento</a>
+        <a href="#semanas">Semana 03 · Taxonomía</a>
+        <a href="#semanas">Semana 04 · Búsqueda A*</a>
+        <a href="#semanas">Semana 07 · Representaciones</a>
+      </div>
+    </div>
+    <div>
+      <h4>Más</h4>
+      <div class="footer-links">
+        <a href="#semanas">Semana 08 · Red + Ontología</a>
+        <a href="#semanas">Semana 09 · Visión</a>
+        <a href="#semanas">Semana 05 · Sistema híbrido</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- ============ OVERLAY ============ -->
+<div class="overlay" id="overlay">
+  <div class="spinner"></div>
+  <p id="overlayMsg">Analizando…</p>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+const state = {
+  file: null,
+  imgUrl: null,
+  mode: null,          // 'imagen' | 'texto'
+  weeks: {},           // id -> {label, sub, badge, render}
+  activeWeek: null,
+};
+
+/* ----------------------------- utilidades ----------------------------- */
+function esc(v){
+  return String(v == null ? '' : v)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function pct(x){ return (x*100).toFixed(1) + '%'; }
+function setStatus(msg, cls){
+  const el = $('status');
+  el.textContent = msg || '';
+  el.className = 'status' + (cls ? ' ' + cls : '');
+}
+function showOverlay(msg){
+  $('overlayMsg').textContent = msg || 'Analizando…';
+  $('overlay').classList.add('on');
+}
+function hideOverlay(){ $('overlay').classList.remove('on'); }
+
+/* --------------------------- selección imagen --------------------------- */
+const dz = $('dropzone');
+const fileInput = $('fileInput');
+
+dz.addEventListener('click', () => fileInput.click());
+dz.addEventListener('keydown', (e) => { if(e.key==='Enter'||e.key===' ') fileInput.click(); });
+
+fileInput.addEventListener('change', (e) => {
+  if (e.target.files && e.target.files[0]) loadFile(e.target.files[0]);
+});
+['dragenter','dragover'].forEach(ev => dz.addEventListener(ev, e => {
+  e.preventDefault(); dz.classList.add('dragover');
+}));
+['dragleave','drop'].forEach(ev => dz.addEventListener(ev, e => {
+  e.preventDefault(); dz.classList.remove('dragover');
+}));
+dz.addEventListener('drop', e => {
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) loadFile(f);
+});
+
+function loadFile(file){
+  if (!file.type.startsWith('image/')){ setStatus('El archivo no es una imagen.', 'error'); return; }
+  state.file = file;
+  if (state.imgUrl) URL.revokeObjectURL(state.imgUrl);
+  state.imgUrl = URL.createObjectURL(file);
+  const img = $('preview');
+  img.src = state.imgUrl;
+  img.style.display = 'block';
+  $('dropPlaceholder').style.display = 'none';
+  $('fileMeta').textContent = `📄 ${file.name} — ${(file.size/1024).toFixed(1)} KB — listo para diagnosticar`;
+  setStatus('Imagen cargada: ' + file.name, 'ok');
+}
+
+/* ------------------------------- tabs -------------------------------- */
+function setWeeks(weeks, activeId, modeLabel){
+  state.weeks = weeks;
+  state.activeWeek = activeId;
+  $('resultsMode').textContent = modeLabel;
+  const rail = $('weeksRail');
+  rail.innerHTML = '';
+  Object.entries(weeks).forEach(([id, w]) => {
+    const b = document.createElement('button');
+    b.className = 'week-tab' + (id === activeId ? ' active' : '');
+    b.innerHTML = `<span class="n">${esc(w.sub || ('Semana ' + id))}</span>${esc(w.label)}` +
+                  (w.badge ? `<span class="badge">${esc(w.badge)}</span>` : '');
+    b.addEventListener('click', () => {
+      state.activeWeek = id;
+      [...rail.children].forEach(c => c.classList.remove('active'));
+      b.classList.add('active');
+      renderPane();
+    });
+    rail.appendChild(b);
+  });
+  renderPane();
+}
+
+function renderPane(){
+  const w = state.weeks[state.activeWeek];
+  const pane = $('resultPane');
+  if (!w){ pane.innerHTML = ''; return; }
+  try {
+    pane.innerHTML = w.render();
+  } catch(err){
+    pane.innerHTML = `<div class="status error">Error al mostrar: ${esc(err.message)}</div>`;
+  }
+}
+
+/* --------------------------- render helpers --------------------------- */
+function tag(ok){ return ok ? '<span class="tag ok">SÍ</span>' : '<span class="tag no">NO</span>'; }
+
+function confBar(v){
+  return `<div class="confbar"><span style="width:${Math.max(0,Math.min(1,v))*100}%"></span></div>`;
+}
+
+function tableTop3(top3){
+  if (!top3 || !top3.length) return '';
+  return `<table><thead><tr><th>#</th><th>Clase</th><th>Probabilidad</th></tr></thead><tbody>` +
+    top3.map((t,i) => `<tr class="${i===0?'hit':''}"><td>${i+1}</td><td>${esc(t.clase)}</td><td>${pct(t.probabilidad)}</td></tr>`).join('') +
+    `</tbody></table>`;
+}
+
+/* ============================ RENDER SEMANAS ============================ */
+const renderers = {
+  2(d){
+    return `
+      <div class="subhead">Semana 02 · Entrenamiento</div>
+      <div class="big-result">
+        <div><div class="label">Clase detectada</div><div class="value">${esc(d.clase)}</div></div>
+        <div style="min-width:260px"><div class="label">Confianza</div>
+          <div class="value">${pct(d.confianza)}</div>${confBar(d.confianza)}</div>
+      </div>
+      <div class="divider"></div>
+      <p class="mono tiny muted">Modelo: ${esc(d.modelo)} · ${d.clases_dataset} clases del dataset</p>
+      <div class="subhead">Top-3 clases</div>
+      ${tableTop3(d.top3)}
+    `;
+  },
+  3(d){
+    return `
+      <div class="subhead">Semana 03 · Taxonomía</div>
+      <div class="big-result">
+        <div><div class="label">Categoría taxonómica</div>
+        <div class="value"><span class="chip">${esc(d.categoria)}</span></div></div>
+      </div>
+      <div class="divider"></div>
+      <p class="mono tiny muted">La clase detectada se asocia a una de las categorías de la base de conocimiento
+      (sana, fúngica, bacteriana, viral o plaga) mediante coincidencia de palabras clave.</p>
+    `;
+  },
+  4(d){
+    let cuerpo = '';
+    if (d.planta_sana){
+      cuerpo = `<p class="mono">🌿 Planta sana — no se requiere tratamiento (plan vacío, costo 0).</p>`;
+    } else if (d.meta_inalcanzable){
+      cuerpo = `<p class="mono">⚡ Meta inalcanzable (viral): solo contención y manejo, sin cura total.</p>`;
+    } else {
+      cuerpo = `
+        <p class="mono tiny muted">Costo óptimo: <strong>${d.costo_total}</strong> · Nodos expandidos: <strong>${d.nodos_expandidos}</strong></p>
+        <table><thead><tr><th>#</th><th>Acción</th><th>+Costo</th><th>→ Estado</th></tr></thead><tbody>
+        ${d.plan.map((p,i) => `<tr><td>${i+1}</td><td>${esc(p.accion)}</td><td>+${p.costo}</td><td>${esc(p.siguiente)}</td></tr>`).join('')}
+        </tbody></table>`;
+    }
+    return `<div class="subhead">Semana 04 · Búsqueda A* — Plan de recuperación</div>
+      <p class="mono tiny muted">Categoría usada por el grafo: ${esc(d.categoria)}</p>${cuerpo}`;
+  },
+  7(d){
+    const s = d.simbolico;
+    const reglas = s.reglas.map(r => `<tr class="${r.aplica?'hit':''}">
+        <td>SI {${r.condiciones.map(esc).join(', ')}}</td>
+        <td>ENTONCES ${esc(r.resultado)}</td>
+        <td>${tag(r.aplica)}</td></tr>`).join('');
+    const automata = d.automata;
+    return `
+      <div class="subhead">Semana 07 · Representación numérica</div>
+      <p class="mono">Vector (verdor, amarillez, manchas): <strong>[${d.vector.join(', ')}]</strong><br>
+      Hoja sana de referencia: [${d.hoja_sana.join(', ')}]<br>
+      Distancia euclidiana: <strong>${d.distancia.toFixed(3)}</strong></p>
+      <div class="divider"></div>
+      <div class="subhead">Representación simbólica (hechos + reglas)</div>
+      <p class="mono tiny muted">Hechos observados:</p>
+      <p>${s.hechos.map(h => `<span class="chip">${esc(h)}</span>`).join('') || '<span class="muted">—</span>'}</p>
+      <table><thead><tr><th>Regla</th><th>Resultado</th><th>Aplica</th></tr></thead><tbody>${reglas}</tbody></table>
+      <p class="mono" style="margin-top:12px">Conclusión: <strong>${esc(s.significado)}</strong> (${esc(s.conclusion)})</p>
+      <div class="divider"></div>
+      <div class="subhead">Autómata (validación de secuencia)</div>
+      <p class="mono">Secuencia del plan aceptada: ${tag(automata.secuencia_valida)} · Estado final: <strong>${esc(automata.estado_final)}</strong></p>
+    `;
+  },
+  8(d){
+    if (d.no_disponible){
+      return `<div class="subhead">Semana 08 · Red neuronal + evidencia + ontología</div>
+        <p class="mono muted">No disponible: ${esc(d.detalle)}</p>`;
+    }
+    let ev = '';
+    if (d.evidencia){
+      ev = `<p class="mono tiny muted">Base SQLite: ${d.evidencia.registros} registros · ${d.evidencia.correctas} correctas</p>
+      <table><thead><tr><th>ID</th><th>Imagen</th><th>Real</th><th>Predicción</th><th>OK</th></tr></thead><tbody>
+      ${d.evidencia.muestras.map(m => `<tr><td>${m.id}</td><td>${esc(m.imagen)}</td><td>${esc(m.real)}</td><td>${esc(m.prediccion)}</td><td>${tag(m.correcta)}</td></tr>`).join('')}
+      </tbody></table>`;
+    }
+    let ont = '';
+    if (d.ontologia){
+      ont = `<p class="mono tiny muted">Ontología: ${d.ontologia.nodos} nodos · ${d.ontologia.relaciones} relaciones</p>
+      <table><thead><tr><th>Origen</th><th>Relación</th><th>Destino</th></tr></thead><tbody>
+      ${d.ontologia.detalle.map(r => `<tr><td>${esc(r.origen)}</td><td>${esc(r.relacion)}</td><td>${esc(r.destino)}</td></tr>`).join('')}
+      </tbody></table>`;
+    }
+    return `
+      <div class="subhead">Semana 08 · Red neuronal MLP</div>
+      <div class="big-result">
+        <div><div class="label">Predicción de la red</div><div class="value">${esc(d.prediccion)}</div></div>
+        <div style="min-width:260px"><div class="label">Confianza</div>
+          <div class="value">${pct(d.confianza)}</div>${confBar(d.confianza)}</div>
+      </div>
+      <p class="mono tiny muted">Arquitectura: ${esc(d.arquitectura)}</p>
+      <div class="subhead">Top-3 (red)</div>
+      ${tableTop3(d.top3)}
+      <div class="divider"></div>
+      <div class="subhead">Evidencia (SQLite)</div>${ev || '<p class="muted mono tiny">sin evidencia</p>'}
+      <div class="divider"></div>
+      <div class="subhead">Ontología (GraphML)</div>${ont || '<p class="muted mono tiny">sin ontología</p>'}
+    `;
+  },
+  9(d){
+    if (d.no_disponible){
+      return `<div class="subhead">Semana 09 · Visión por computador</div>
+        <p class="mono muted">No disponible (scikit-image o imagen no procesable).</p>`;
+    }
+    const canny = d.canny ? Object.keys(d.canny).sort((a,b)=>a-b).map(s => `<tr><td>σ = ${s}</td><td>${d.canny[s]} px</td></tr>`).join('') : '';
+    const canales = d.canales ? Object.entries(d.canales).map(([k,v]) => `<tr><td>Otsu ${esc(k)}</td><td>${Number(v).toFixed(4)}</td></tr>`).join('') : '';
+    let principal = '<p class="mono tiny muted">No se halló una región de hoja sobre el área mínima.</p>';
+    if (d.region_principal){
+      const r = d.region_principal;
+      principal = `<p class="mono">Área: <strong>${r.area} px</strong> (${pct(d.cobertura)} de la imagen)<br>
+        bbox: [${r.bbox.join(', ')}] · centroide: [${r.centroide.join(', ')}] · solidez: ${r.solidez}</p>`;
+    }
+    const imgs = [];
+    if (d.imagenes && d.imagenes.canny) imgs.push(`<figure><img src="data:image/png;base64,${d.imagenes.canny}"><figcaption>Canny σ=1.0</figcaption></figure>`);
+    if (d.imagenes && d.imagenes.otsu) imgs.push(`<figure><img src="data:image/png;base64,${d.imagenes.otsu}"><figcaption>Máscara Otsu</figcaption></figure>`);
+    if (d.panel) imgs.push(`<figure><img src="data:image/png;base64,${d.panel}"><figcaption>Panel Canny / Otsu / regiones</figcaption></figure>`);
+    return `
+      <div class="subhead">Semana 09 · Visión por computador</div>
+      <p class="mono">Umbral Otsu (saturación): <strong>${Number(d.umbral).toFixed(4)}</strong> · Regiones detectadas: <strong>${d.total_regiones}</strong></p>
+      <div class="img-grid">${imgs.join('')}</div>
+      <div class="subhead">Umbrales Otsu por canal</div>
+      <table><tbody>${canales}</tbody></table>
+      <div class="subhead">Píxeles de borde por σ (Canny)</div>
+      <table><thead><tr><th>σ</th><th>Bordes</th></tr></thead><tbody>${canny}</tbody></table>
+      <div class="subhead">Región principal</div>
+      ${principal}
+    `;
+  },
+  5(d){
+    let plan = '';
+    if (d.plan && d.plan.length){
+      plan = `<div class="subhead">Plan A* sugerido</div>
+        <table><thead><tr><th>#</th><th>Acción</th><th>+Costo</th><th>→</th></tr></thead><tbody>
+        ${d.plan.map((p,i)=>`<tr><td>${i+1}</td><td>${esc(p.accion)}</td><td>+${p.costo}</td><td>${esc(p.siguiente)}</td></tr>`).join('')}
+        </tbody></table>
+        <p class="mono" style="margin-top:10px">Costo óptimo: <strong>${d.costo_total}</strong></p>`;
+    }
+    const casos = (d.casos||[]).map(c => `<span class="chip">${esc(c.titulo)}</span>`).join('');
+    const razones = (d.razones||[]).map(r => `<li>${esc(r)}</li>`).join('');
+    let valid = '';
+    if (d.validacion){
+      valid = `<div class="subhead">Validación (Autómata)</div>
+        <p class="mono">Secuencia del plan válida: ${tag(d.validacion.valida)} · Estado final: <strong>${esc(d.validacion.estado_final)}</strong></p>`;
+    }
+    return `
+      <div class="subhead">Semana 05 · Sistema híbrido — Consulta por síntomas</div>
+      <div class="big-result">
+        <div><div class="label">Categoría</div><div class="value"><span class="chip">${esc(d.categoria || 'sin clasificar')}</span></div></div>
+        <div><div class="label">Aplica A*</div><div class="value">${tag(d.aplica_astar)}</div></div>
+        <div><div class="label">Intención de ruta</div><div class="value">${tag(d.intencion_ruta)}</div></div>
+      </div>
+      <div class="divider"></div>
+      <p class="mono tiny muted">Palabras clave: ${(d.palabras_clave||[]).join(', ') || 'ninguna'}</p>
+      <p class="mono tiny muted">Reglas activadas: ${(d.reglas||[]).join(', ') || 'ninguna'}</p>
+      <div class="subhead">Solución recomendada</div>
+      <p>${esc(d.solucion)}</p>
+      ${plan}
+      ${valid}
+      <div class="divider"></div>
+      <div class="subhead">¿Por qué aplica A*?</div>
+      ${casos ? `<p>${casos}</p>` : ''}
+      <ul class="mono tiny">${razones}</ul>
+      <div class="subhead">Explicación</div>
+      <p class="mono tiny">${esc(d.explicacion).replace(/\n/g,'<br>')}</p>
+    `;
+  },
+};
+
+/* ============================== ACCIONES ============================== */
+function emptyPaneMsg(msg){ $('resultPane').innerHTML = `<div class="status error">${esc(msg)}</div>`; }
+
+$('btnDiagnose').addEventListener('click', async () => {
+  if (!state.file){ setStatus('Selecciona una imagen antes de diagnosticar.', 'error'); return; }
+  const fd = new FormData();
+  fd.append('imagen', state.file);
+  showOverlay('Procesando imagen…');
+  setStatus('Procesando imagen…');
+  try {
+    const res = await fetch('/api/diagnostico', { method:'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok || data.error){ throw new Error(data.error || 'Error del servidor'); }
+
+    const s = data.semanas;
+    const weeks = {};
+    [2,3,4,7,8,9].forEach(id => {
+      if (s[String(id)]){
+        weeks[id] = {
+          sub: 'Semana ' + String(id).padStart(2,'0'),
+          label: ['','','Entrenamiento','Taxonomía','Búsqueda A*','','','Representaciones','Red + Ontología','Visión'][id],
+          render: () => renderers[id](s[String(id)]),
+        };
+      }
+    });
+    state.mode = 'imagen';
+    setWeeks(weeks, 2, `Imagen · ${data.clase} — ${pct(data.confianza)}`);
+    setStatus(`Diagnóstico completo: ${data.clase} — ${pct(data.confianza)}`, 'ok');
+  } catch(err){
+    emptyPaneMsg('Error: ' + err.message);
+    setStatus('Error: ' + err.message, 'error');
+  } finally {
+    hideOverlay();
+  }
+});
+
+async function consultar(){
+  const texto = $('symptoms').value.trim();
+  if (!texto){ setStatus('Escribe los síntomas antes de consultar.', 'error'); return; }
+  showOverlay('Consultando sistema híbrido…');
+  setStatus('Consultando sistema híbrido…');
+  try {
+    const res = await fetch('/api/consulta', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ texto })
+    });
+    const data = await res.json();
+    if (!res.ok || data.error){ throw new Error(data.error || 'Error del servidor'); }
+
+    const weeks = {
+      5: {
+        sub: 'Semana 05', label: 'Sistema híbrido',
+        badge: 'en ejecución',
+        render: () => renderers[5](data),
+      }
+    };
+    state.mode = 'texto';
+    setWeeks(weeks, 5, 'Texto · Semana 05');
+    setStatus('Respuesta generada.', 'ok');
+  } catch(err){
+    emptyPaneMsg('Error: ' + err.message);
+    setStatus('Error: ' + err.message, 'error');
+  } finally {
+    hideOverlay();
+  }
+}
+
+$('btnConsult').addEventListener('click', consultar);
+$('navConsult').addEventListener('click', () => {
+  document.getElementById('diagnostico').scrollIntoView({behavior:'smooth'});
+  $('symptoms').focus();
+});
+$('symptoms').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) consultar();
+});
+
+$('btnClear').addEventListener('click', () => {
+  state.weeks = {}; state.activeWeek = null; state.mode = null;
+  $('weeksRail').innerHTML = '';
+  $('resultsMode').textContent = '—';
+  $('resultPane').innerHTML = `<div class="empty">
+      <svg viewBox="0 0 320 260" fill="none" stroke="#222" stroke-width="2">
+        <path d="M160 240V140"/><path d="M160 190c-40 0-64-25-64-62 36 0 64 25 64 62z" fill="#bfb33b"/>
+        <path d="M160 190c40 0 64-25 64-62-36 0-64 25-64 62z" fill="#bfb33b"/>
+        <path d="M160 140c-24-10-34-38-26-64 22 7 34 34 26 64z" fill="#bfb33b"/>
+        <path d="M160 140c24-10 34-38 26-64-22 7-34 34-26 64z" fill="#bfb33b"/>
+      </svg>
+      <p>Resultados limpiados. Seleccione una imagen o escriba síntomas para comenzar.</p></div>`;
+  setStatus('Resultados limpiados.', 'ok');
+});
+
+/* ------------------------------ estado ------------------------------ */
+fetch('/api/health').then(r => r.json()).then(h => {
+  const red = h.modelo_semana08 ? 'S8 lista' : 'S8 no disponible';
+  setStatus(`Backend activo · modelo S2 ${h.modelo_semana02 ? 'cargado' : 'no disponible'} · ${red}`, h.pipeline ? 'ok' : 'error');
+}).catch(() => setStatus('No se pudo contactar el backend.', 'error'));
+</script>
+</body>
+</html>

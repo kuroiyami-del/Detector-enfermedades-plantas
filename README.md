@@ -121,7 +121,9 @@ plantas_enfermas/
 │   ├── semana08_red_ontologia.py    # Red neuronal MLP + evidencia SQLite + ontologia
 │   ├── semana09_vision.py          # Caracteristicas + Canny + Otsu + regiones
 │   └── pipeline.py                 # Pipeline integrada image→prediccion→plan
-├── main.py                         # Punto de entrada
+├── main.py                         # Punto de entrada (CLI)
+├── server.py                       # Backend web (Flask) que sirve index.html
+├── index.html                      # Interfaz web (diagnostico + barra de semanas)
 ├── artifacts/                      # Artefactos semana 08/09 (modelo, BD, ontologia, panel)
 ├── requirements.txt
 └── README.md
@@ -137,6 +139,7 @@ plantas_enfermas/
 - **numpy** - Operaciones con arreglos numericos
 - **pandas** - Manipulacion de datos (lectura de CSVs)
 - **tensorflow** - Framework de deep learning (disponible para avances futuros)
+- **Flask** - Backend web que sirve `index.html` y expone el diagnostico por HTTP
 
 ## Como ejecutar
 
@@ -153,7 +156,33 @@ plantas_enfermas/
    pip install -r requirements.txt
    ```
 
-### Ejecutar el proyecto completo
+### Ejecutar la interfaz web
+
+```
+.\.venv\Scripts\activate
+python server.py
+```
+
+Luego abrir en el navegador: **http://127.0.0.1:5000**
+
+La pagina `index.html` ofrece la misma interfaz de la anterior version de
+escritorio: seleccionar una imagen, escribir sintomas y los botones
+**Diagnosticar** (imagen) y **Consultar sintomas** (texto). Los resultados se
+muestran en una barra lateral por semanas:
+
+- **Caso A (imagen):** ejecuta las semanas 02, 03, 04, 07, 08 y 09 para esa
+  planta. La semana 02 es la vista por defecto. La semana 05 no aparece.
+- **Caso B (sintomas):** ejecuta la semana 05 (sistema hibrido) y la marca como
+  la que se esta ejecutando.
+
+Si se envia imagen y texto a la vez, cada boton mantiene su comportamiento
+independiente: "Diagnosticar" usa la imagen e ignora el texto; "Consultar
+sintomas" usa el texto e ignora la imagen.
+
+El backend `server.py` solo importa y llama a las funciones de los modulos
+`src/semanaXX.py`; no modifica su logica.
+
+### Ejecutar el proyecto completo (consola)
 
 ```
 .\.venv\Scripts\activate
