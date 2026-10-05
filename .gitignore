@@ -8,3 +8,4 @@ artifacts/diagnostico_*.png
 
 data/*
 !data/imagen_proyecto.png
+AI_CODING_RULES.md
