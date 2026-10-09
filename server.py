@@ -198,6 +198,88 @@ def _semana10_disponible():
         return False
 
 
+def _resumen_semana10_imagen(resultado):
+    """Resume una imagen ya procesada por semana10.analizar_imagen().
+
+    Se usa tanto para la comparacion en vivo (diagnostico) como para los
+    artefactos guardados, para no repetir el calculo del resumen del vector.
+    """
+    vector = np.asarray(resultado["vector"], dtype=float)
+    hist_int = np.asarray(resultado["histograma_intensidad"], dtype=float)
+    hist_lbp = np.asarray(resultado["histograma_lbp"], dtype=float)
+    regiones = resultado["regiones"]
+    return {
+        "nombre": resultado["nombre"],
+        "ruta": resultado.get("ruta", ""),
+        "umbral_otsu": float(resultado["umbral_otsu"]),
+        "total_regiones": int(resultado["total_regiones"]),
+        "cantidad_regiones": int(regiones["cantidad"]),
+        "area_media": float(regiones["area_media"]),
+        "area_desviacion": float(regiones["area_desviacion"]),
+        "dimension": int(vector.size),
+        "resumen_vector": {
+            "min": float(vector.min()),
+            "max": float(vector.max()),
+            "media": float(vector.mean()),
+            "desviacion": float(vector.std()),
+            "primeros": [float(x) for x in vector[:3]],
+        },
+        "histograma_intensidad_pico": {
+            "bin": int(np.argmax(hist_int)),
+            "valor": float(hist_int.max()),
+        },
+        "lbp_no_uniforme": float(hist_lbp[-1]),
+    }
+
+
+def _semana10_comparacion(ruta):
+    """Compara la imagen subida con una referencia del proyecto (semana 10).
+
+    Ejecuta el pipeline de la semana 10 sobre la imagen del usuario y sobre la
+    hoja sana de referencia, genera la figura comparativa en artifacts/ y
+    devuelve el mismo resumen que /api/semana10. Devuelve (payload, error).
+    """
+    p = pipeline()
+    if p is None or "semana10_texturas" not in (p or {}):
+        return None, "modulo de semana 10 no disponible"
+    if np is None:
+        return None, "numpy no disponible"
+
+    from src.config import ARTIFACTS_DIR, ROOT
+
+    s10 = p["semana10_texturas"]
+    referencia = getattr(s10, "IMAGEN_REFERENCIA",
+                        ROOT / "data" / "imagen_proyecto_2.png")
+    if not referencia.exists():
+        return None, "falta data/imagen_proyecto_2.png (referencia)"
+
+    try:
+        resultados = [
+            s10.analizar_imagen(ruta, "Tu imagen"),
+            s10.analizar_imagen(referencia, "Referencia · hoja sana"),
+        ]
+        salida = ARTIFACTS_DIR / "web_semana10_comparacion.png"
+        s10.generar_figura(resultados, salida)
+        with open(salida, "rb") as fh:
+            histograma_b64 = base64.b64encode(fh.read()).decode("ascii")
+    except Exception as exc:  # pragma: no cover
+        return None, str(exc)
+
+    return {
+        "disponible": True,
+        "es_diagnostico": True,
+        "dimension": int(resultados[0]["dimension"]),
+        "area_minima": int(getattr(s10, "AREA_MINIMA", 0)),
+        "lbp": {"radius": getattr(s10, "LBP_RADIUS", 0),
+                "points": getattr(s10, "LBP_POINTS", 0),
+                "method": getattr(s10, "LBP_METHOD", "")},
+        "imagenes": [_resumen_semana10_imagen(r) for r in resultados],
+        "histograma": histograma_b64,
+        "referencia": "data/imagen_proyecto_2.png",
+        "figura": "artifacts/web_semana10_comparacion.png",
+    }, None
+
+
 @app.route("/api/semana10")
 def semana10():
     """Devuelve los artefactos de la semana 10.
@@ -225,33 +307,23 @@ def semana10():
 
     datos = np.load(ruta_features, allow_pickle=True).item()
 
-    imagenes = []
-    for im in datos.get("imagenes", []):
-        vector = np.asarray(im["vector"], dtype=float)
-        hist_int = np.asarray(im["histograma_intensidad"], dtype=float)
-        hist_lbp = np.asarray(im["histograma_lbp"], dtype=float)
-        imagenes.append({
+    imagenes = [
+        _resumen_semana10_imagen({
             "nombre": im["nombre"],
-            "ruta": im["ruta"],
-            "umbral_otsu": float(im["umbral_otsu"]),
-            "total_regiones": int(im["total_regiones"]),
-            "cantidad_regiones": int(im["cantidad_regiones"]),
-            "area_media": float(im["area_media"]),
-            "area_desviacion": float(im["area_desviacion"]),
-            "dimension": int(vector.size),
-            "resumen_vector": {
-                "min": float(vector.min()),
-                "max": float(vector.max()),
-                "media": float(vector.mean()),
-                "desviacion": float(vector.std()),
-                "primeros": [float(x) for x in vector[:3]],
+            "ruta": im.get("ruta", ""),
+            "umbral_otsu": im["umbral_otsu"],
+            "total_regiones": im["total_regiones"],
+            "regiones": {
+                "cantidad": im["cantidad_regiones"],
+                "area_media": im["area_media"],
+                "area_desviacion": im["area_desviacion"],
             },
-            "histograma_intensidad_pico": {
-                "bin": int(np.argmax(hist_int)),
-                "valor": float(hist_int.max()),
-            },
-            "lbp_no_uniforme": float(hist_lbp[-1]),
+            "vector": im["vector"],
+            "histograma_intensidad": im["histograma_intensidad"],
+            "histograma_lbp": im["histograma_lbp"],
         })
+        for im in datos.get("imagenes", [])
+    ]
 
     with open(ruta_hist, "rb") as fh:
         histograma_b64 = base64.b64encode(fh.read()).decode("ascii")
@@ -434,6 +506,22 @@ def diagnostico():
             "imagenes": None if vision is None else vision.get("imagenes"),
             "panel": panel_b64,
         }
+
+        # --- Semana 10: reconocimiento de imagenes (texturas) --------------
+        # Compara la imagen subida por el usuario con la hoja sana de
+        # referencia del proyecto, reutilizando el mismo pipeline.
+        comparacion, error10 = _semana10_comparacion(ruta)
+        if comparacion is not None:
+            resultado["semanas"]["10"] = {
+                "titulo": "Semana 10 - Reconocimiento de imagenes (texturas)",
+                **comparacion,
+            }
+        else:
+            resultado["semanas"]["10"] = {
+                "titulo": "Semana 10 - Reconocimiento de imagenes (texturas)",
+                "no_disponible": True,
+                "detalle": error10,
+            }
 
         return jsonify(resultado)
 

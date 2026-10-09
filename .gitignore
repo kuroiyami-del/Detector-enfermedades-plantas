@@ -6,6 +6,7 @@ __pycache__/
 logs/
 artifacts/diagnostico_*.png
 artifacts/web_semana09_panel.png
+artifacts/web_semana10_comparacion.png
 
 data/*
 !data/imagen_proyecto.png

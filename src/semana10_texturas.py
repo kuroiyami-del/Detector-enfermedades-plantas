@@ -14,12 +14,17 @@ RAIZ = Path(__file__).resolve().parent.parent
 RUTA_SALIDA_FEATURES = ARTIFACTS_DIR / "semana10_features.npy"
 RUTA_SALIDA_HISTOGRAMA = ARTIFACTS_DIR / "semana10_histograma.png"
 
-# Las dos imagenes del dominio que se comparan. La primera es la hoja de tomate
-# con septoria que ya usa la semana 09; la segunda es una hoja de tomate sana
-# de PlantVillage, para contrastar regiones, histograma y textura.
+# Imagen de referencia (hoja sana de PlantVillage) contra la que la interfaz
+# web compara la imagen que sube el usuario en la pestana Semana 10.
+IMAGEN_REFERENCIA = RAIZ / "data" / "imagen_proyecto_2.png"
+
+# Las dos imagenes del dominio que se comparan por defecto en consola. La
+# primera es la hoja de tomate con septoria que ya usa la semana 09; la segunda
+# es una hoja de tomate sana de PlantVillage, para contrastar regiones,
+# histograma y textura.
 IMAGENES = (
     ("Tomate con septoria", RAIZ / "data" / "imagen_proyecto.png"),
-    ("Tomate sana", RAIZ / "data" / "imagen_proyecto_2.png"),
+    ("Tomate sana", IMAGEN_REFERENCIA),
 )
 
 # Una region con menos area que esto se considera ruido y no se cuenta.

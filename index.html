@@ -744,13 +744,16 @@ const renderers = {
       <p class="mono tiny">${esc(d.explicacion).replace(/\n/g,'<br>')}</p>
     `;
   },
-  10(){
-    if (!state.semana10){
-      cargarSemana10();
-      return `<div class="subhead">Semana 10 · Reconocimiento de imágenes — Texturas</div>
-        <p class="mono muted">Cargando artefactos de la semana 10…</p>`;
+  10(d){
+    const esDiag = !!d;
+    if (!esDiag){
+      if (!state.semana10){
+        cargarSemana10();
+        return `<div class="subhead">Semana 10 · Reconocimiento de imágenes — Texturas</div>
+          <p class="mono muted">Cargando artefactos de la semana 10…</p>`;
+      }
+      d = state.semana10;
     }
-    const d = state.semana10;
     if (!d.disponible){
       return `<div class="subhead">Semana 10 · Reconocimiento de imágenes — Texturas</div>
         <p class="mono muted">No disponible: ${esc(d.detalle || d.error || 'sin datos')}</p>`;
@@ -772,16 +775,27 @@ const renderers = {
         <td>${Number(im.lbp_no_uniforme).toFixed(3)}</td></tr>`;
     }).join('');
     const lbp = d.lbp || {};
+    const titulo = esDiag
+      ? 'Semana 10 · Comparación: tu imagen vs hoja sana de referencia'
+      : 'Semana 10 · Reconocimiento de imágenes — Texturas';
+    const caption = esDiag
+      ? (d.figura || 'comparación') + ' — tu imagen vs hoja sana de referencia'
+      : 'artifacts/semana10_histograma.png — comparación de las dos imágenes';
+    const nota = esDiag
+      ? `<p class="mono tiny muted">Se analizó la imagen que subiste y se comparó contra la hoja sana
+      de referencia del proyecto (${esc(d.referencia || 'data/imagen_proyecto_2.png')}).</p>`
+      : '';
     return `
-      <div class="subhead">Semana 10 · Reconocimiento de imágenes — Texturas</div>
+      <div class="subhead">${esc(titulo)}</div>
       <p class="mono tiny muted">Vector de ${d.dimension} valores = 3 (área media, desviación y cantidad de regiones)
       + 32 (histograma de intensidad) + 18 (histograma LBP). Filtro de área: &gt; ${d.area_minima} px ·
       LBP R=${lbp.radius}, P=${lbp.points}, method='${esc(lbp.method || '')}'.</p>
+      ${nota}
       <div class="img-grid">
         <figure><img src="data:image/png;base64,${d.histograma}">
-        <figcaption>artifacts/semana10_histograma.png — comparación de las dos imágenes</figcaption></figure>
+        <figcaption>${esc(caption)}</figcaption></figure>
       </div>
-      <div class="subhead">Comparación de las dos imágenes</div>
+      <div class="subhead">Comparación de las imágenes</div>
       <table><thead><tr><th>Imagen</th><th>Otsu</th><th>Regiones</th>
         <th>Regiones &gt; ${d.area_minima} px</th><th>Área media</th><th>Desv. área</th><th>Dim.</th></tr></thead>
         <tbody>${filas}</tbody></table>
@@ -843,7 +857,7 @@ $('btnDiagnose').addEventListener('click', async () => {
       }
     });
     weeks[10] = { sub: 'Semana 10', label: 'Texturas',
-                  render: () => renderers[10]() };
+                  render: () => renderers[10](s["10"]) };
     state.mode = 'imagen';
     setWeeks(weeks, 2, `Imagen · ${data.clase} — ${pct(data.confianza)}`);
     setStatus(`Diagnóstico completo: ${data.clase} — ${pct(data.confianza)}`, 'ok');
