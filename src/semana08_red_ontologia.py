@@ -1,5 +1,6 @@
 import sys
 import time
+import json
 
 import numpy as np
 import sqlite3
@@ -10,7 +11,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import accuracy_score
 
-from src.config import RAW_DIR, ARTIFACTS_DIR, RANDOM_STATE
+from src.config import RAW_DIR, ARTIFACTS_DIR, RANDOM_STATE, MODELS_DIR
 
 
 # ---------------------------------------------------------------------------
@@ -20,7 +21,24 @@ from src.config import RAW_DIR, ARTIFACTS_DIR, RANDOM_STATE
 # ---------------------------------------------------------------------------
 
 # Todas las clases de PlantVillage: cada carpeta de RAW_DIR es una categoria.
-CLASES = sorted(carpeta.name for carpeta in RAW_DIR.iterdir() if carpeta.is_dir())
+# Si el dataset no esta presente (esta en .gitignore), se reconstruye el mismo
+# orden a partir de models/class_map.json en lugar de fallar al importar. Asi
+# los modulos que solo necesitan el modelo ya entrenado (semana02/09/10 y el
+# pipeline) pueden cargarse sin el dataset; el entrenamiento si exige RAW_DIR.
+def _listar_clases():
+    if RAW_DIR.exists():
+        return sorted(carpeta.name for carpeta in RAW_DIR.iterdir()
+                      if carpeta.is_dir())
+    ruta = MODELS_DIR / "class_map.json"
+    if ruta.exists():
+        with open(ruta, "r", encoding="utf-8") as fh:
+            class_map = json.load(fh)
+        return [nombre for nombre, _ in sorted(class_map.items(),
+                                               key=lambda kv: kv[1])]
+    return []
+
+
+CLASES = _listar_clases()
 
 # Cada imagen se convierte en una matriz de 48 x 48 pixeles. Al aplanar esa
 # matriz quedan 48 * 48 = 2304 caracteristicas, que son las entradas de la red.
