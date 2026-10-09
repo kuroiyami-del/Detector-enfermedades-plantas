@@ -247,26 +247,12 @@ tr.hit td{background:rgba(191,179,59,.25);}
 .img-grid figcaption{font-family:var(--font-hellenictypewriter);font-size:12px;
   padding:6px 8px;border-top:1px solid var(--color-ink-black);}
 
-/* ---------- Semana 10: código y markdown ---------- */
+/* ---------- Semana 10: código fuente ---------- */
 .code-block{
   background:#f3ece6;border:1px solid var(--color-ink-black);
   font-family:var(--font-hellenictypewriter);font-size:12px;line-height:1.5;
   padding:16px;overflow:auto;max-height:520px;white-space:pre;margin:0;
 }
-.md{font-size:var(--text-body);line-height:1.6;}
-.md h1{font-family:var(--font-hellenictypewriter);font-size:var(--text-heading-sm);margin:24px 0 10px;}
-.md h2{font-family:var(--font-hellenictypewriter);font-size:var(--text-subheading);margin:22px 0 10px;}
-.md h3{font-family:var(--font-hellenictypewriter);font-size:var(--text-subheading);margin:18px 0 8px;}
-.md p{margin:10px 0;max-width:80ch;}
-.md ul{margin:10px 0 10px 20px;padding:0;}
-.md li{margin:4px 0;}
-.md code{font-family:var(--font-hellenictypewriter);background:var(--color-dusty-lavender);padding:1px 4px;font-size:13px;}
-.md pre{background:#f3ece6;border:1px solid var(--color-ink-black);padding:14px;overflow:auto;
-  font-family:var(--font-hellenictypewriter);font-size:12px;}
-.md pre code{background:none;padding:0;}
-.md table{margin:12px 0;}
-.md strong{font-weight:700;}
-.md a{color:var(--color-deep-teal);}
 
 .empty{
   display:flex;align-items:center;justify-content:center;height:100%;
@@ -322,7 +308,6 @@ footer{border-top:2px solid var(--color-ink-black);margin-top:var(--section-gap)
     <a href="#diagnostico">Diagnóstico</a>
     <a href="#semanas">Semanas</a>
     <a href="#proyecto">Proyecto</a>
-    <a href="#semanas" id="navSemana10">Semana 10</a>
   </div>
   <div class="logo">PlantAI</div>
   <button class="ghost-btn" id="navConsult">
@@ -813,8 +798,6 @@ const renderers = {
         <tbody>${vectores}</tbody></table>
       <div class="subhead">Código — src/semana10_texturas.py</div>
       <pre class="code-block">${esc(d.codigo)}</pre>
-      <div class="subhead">Reporte — reports/semana10.md</div>
-      <div class="md">${mdToHtml(d.reporte)}</div>
     `;
   },
 };
@@ -844,59 +827,6 @@ function mostrarSemana10(){
   state.mode = 'semana10';
   setWeeks(weeks, 10, 'Semana 10 · Texturas');
   setStatus('Semana 10 — reconocimiento de imágenes (texturas).', 'ok');
-}
-
-/* Conversor mínimo de Markdown a HTML (títulos, tablas, listas, negrita y
-   código). Suficiente para renderizar reports/semana10.md sin dependencias. */
-function mdToHtml(md){
-  const lines = (md || '').replace(/\r\n/g, '\n').split('\n');
-  const inline = (s) => esc(s)
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>');
-  const cells = (l) => l.trim().replace(/^\|/, '').replace(/\|$/, '')
-    .split('|').map(c => c.trim());
-  const isSep = (l) => /^\s*\|?[\s:|-]+\|?\s*$/.test(l) && l.includes('-');
-  let html = '', i = 0;
-  while (i < lines.length){
-    const line = lines[i];
-    if (!line.trim()){ i++; continue; }
-    if (/^```/.test(line.trim())){
-      const buf = []; i++;
-      while (i < lines.length && !/^```/.test(lines[i].trim())){ buf.push(lines[i]); i++; }
-      i++;
-      html += `<pre><code>${esc(buf.join('\n'))}</code></pre>`;
-      continue;
-    }
-    const h = /^(#{1,6})\s+(.*)$/.exec(line);
-    if (h){
-      const lvl = Math.min(h[1].length, 4);
-      html += `<h${lvl}>${inline(h[2])}</h${lvl}>`; i++; continue;
-    }
-    if (line.trim().startsWith('|') && i + 1 < lines.length && isSep(lines[i + 1])){
-      const head = cells(line); i += 2; const rows = [];
-      while (i < lines.length && lines[i].trim().startsWith('|')){ rows.push(cells(lines[i])); i++; }
-      html += '<table><thead><tr>' + head.map(c => `<th>${inline(c)}</th>`).join('') + '</tr></thead><tbody>';
-      html += rows.map(r => '<tr>' + r.map(c => `<td>${inline(c)}</td>`).join('') + '</tr>').join('');
-      html += '</tbody></table>';
-      continue;
-    }
-    if (/^[-*]\s+/.test(line)){
-      const items = [];
-      while (i < lines.length && /^[-*]\s+/.test(lines[i])){
-        items.push(inline(lines[i].replace(/^[-*]\s+/, ''))); i++;
-      }
-      html += '<ul>' + items.map(t => `<li>${t}</li>`).join('') + '</ul>';
-      continue;
-    }
-    const buf = [line]; i++;
-    while (i < lines.length && lines[i].trim()
-           && !/^(#{1,6})\s/.test(lines[i]) && !lines[i].trim().startsWith('|')
-           && !/^[-*]\s+/.test(lines[i]) && !/^```/.test(lines[i].trim())){
-      buf.push(lines[i]); i++;
-    }
-    html += `<p>${inline(buf.join(' '))}</p>`;
-  }
-  return html;
 }
 
 $('btnDiagnose').addEventListener('click', async () => {
@@ -974,7 +904,6 @@ $('navConsult').addEventListener('click', () => {
   document.getElementById('diagnostico').scrollIntoView({behavior:'smooth'});
   $('symptoms').focus();
 });
-$('navSemana10').addEventListener('click', (e) => { e.preventDefault(); mostrarSemana10(); });
 $('footSemana10').addEventListener('click', (e) => { e.preventDefault(); mostrarSemana10(); });
 $('symptoms').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) consultar();
