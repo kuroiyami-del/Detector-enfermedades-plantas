@@ -247,6 +247,27 @@ tr.hit td{background:rgba(191,179,59,.25);}
 .img-grid figcaption{font-family:var(--font-hellenictypewriter);font-size:12px;
   padding:6px 8px;border-top:1px solid var(--color-ink-black);}
 
+/* ---------- Semana 10: código y markdown ---------- */
+.code-block{
+  background:#f3ece6;border:1px solid var(--color-ink-black);
+  font-family:var(--font-hellenictypewriter);font-size:12px;line-height:1.5;
+  padding:16px;overflow:auto;max-height:520px;white-space:pre;margin:0;
+}
+.md{font-size:var(--text-body);line-height:1.6;}
+.md h1{font-family:var(--font-hellenictypewriter);font-size:var(--text-heading-sm);margin:24px 0 10px;}
+.md h2{font-family:var(--font-hellenictypewriter);font-size:var(--text-subheading);margin:22px 0 10px;}
+.md h3{font-family:var(--font-hellenictypewriter);font-size:var(--text-subheading);margin:18px 0 8px;}
+.md p{margin:10px 0;max-width:80ch;}
+.md ul{margin:10px 0 10px 20px;padding:0;}
+.md li{margin:4px 0;}
+.md code{font-family:var(--font-hellenictypewriter);background:var(--color-dusty-lavender);padding:1px 4px;font-size:13px;}
+.md pre{background:#f3ece6;border:1px solid var(--color-ink-black);padding:14px;overflow:auto;
+  font-family:var(--font-hellenictypewriter);font-size:12px;}
+.md pre code{background:none;padding:0;}
+.md table{margin:12px 0;}
+.md strong{font-weight:700;}
+.md a{color:var(--color-deep-teal);}
+
 .empty{
   display:flex;align-items:center;justify-content:center;height:100%;
   min-height:360px;text-align:center;flex-direction:column;gap:16px;
@@ -301,6 +322,7 @@ footer{border-top:2px solid var(--color-ink-black);margin-top:var(--section-gap)
     <a href="#diagnostico">Diagnóstico</a>
     <a href="#semanas">Semanas</a>
     <a href="#proyecto">Proyecto</a>
+    <a href="#semanas" id="navSemana10">Semana 10</a>
   </div>
   <div class="logo">PlantAI</div>
   <button class="ghost-btn" id="navConsult">
@@ -450,6 +472,7 @@ footer{border-top:2px solid var(--color-ink-black);margin-top:var(--section-gap)
       <div class="footer-links">
         <a href="#semanas">Semana 08 · Red + Ontología</a>
         <a href="#semanas">Semana 09 · Visión</a>
+        <a href="#semanas" id="footSemana10">Semana 10 · Texturas</a>
         <a href="#semanas">Semana 05 · Sistema híbrido</a>
       </div>
     </div>
@@ -471,6 +494,8 @@ const state = {
   mode: null,          // 'imagen' | 'texto'
   weeks: {},           // id -> {label, sub, badge, render}
   activeWeek: null,
+  semana10: null,      // datos de /api/semana10 (se cargan una vez)
+  semana10Loading: false,
 };
 
 /* ----------------------------- utilidades ----------------------------- */
@@ -741,10 +766,138 @@ const renderers = {
       <p class="mono tiny">${esc(d.explicacion).replace(/\n/g,'<br>')}</p>
     `;
   },
+  10(){
+    if (!state.semana10){
+      cargarSemana10();
+      return `<div class="subhead">Semana 10 · Reconocimiento de imágenes — Texturas</div>
+        <p class="mono muted">Cargando artefactos de la semana 10…</p>`;
+    }
+    const d = state.semana10;
+    if (!d.disponible){
+      return `<div class="subhead">Semana 10 · Reconocimiento de imágenes — Texturas</div>
+        <p class="mono muted">No disponible: ${esc(d.detalle || d.error || 'sin datos')}</p>`;
+    }
+    const filas = d.imagenes.map(im => `<tr>
+        <td>${esc(im.nombre)}</td>
+        <td>${Number(im.umbral_otsu).toFixed(4)}</td>
+        <td>${im.total_regiones}</td>
+        <td>${im.cantidad_regiones}</td>
+        <td>${Number(im.area_media).toFixed(2)}</td>
+        <td>${Number(im.area_desviacion).toFixed(2)}</td>
+        <td>${im.dimension}</td></tr>`).join('');
+    const vectores = d.imagenes.map(im => {
+      const r = im.resumen_vector;
+      return `<tr><td>${esc(im.nombre)}</td><td>${im.dimension}</td>
+        <td>${Number(r.min).toFixed(4)}</td><td>${Number(r.max).toFixed(2)}</td>
+        <td>${Number(r.media).toFixed(4)}</td><td>${Number(r.desviacion).toFixed(2)}</td>
+        <td>pico ${im.histograma_intensidad_pico.bin} (${Number(im.histograma_intensidad_pico.valor).toFixed(3)})</td>
+        <td>${Number(im.lbp_no_uniforme).toFixed(3)}</td></tr>`;
+    }).join('');
+    const lbp = d.lbp || {};
+    return `
+      <div class="subhead">Semana 10 · Reconocimiento de imágenes — Texturas</div>
+      <p class="mono tiny muted">Vector de ${d.dimension} valores = 3 (área media, desviación y cantidad de regiones)
+      + 32 (histograma de intensidad) + 18 (histograma LBP). Filtro de área: &gt; ${d.area_minima} px ·
+      LBP R=${lbp.radius}, P=${lbp.points}, method='${esc(lbp.method || '')}'.</p>
+      <div class="img-grid">
+        <figure><img src="data:image/png;base64,${d.histograma}">
+        <figcaption>artifacts/semana10_histograma.png — comparación de las dos imágenes</figcaption></figure>
+      </div>
+      <div class="subhead">Comparación de las dos imágenes</div>
+      <table><thead><tr><th>Imagen</th><th>Otsu</th><th>Regiones</th>
+        <th>Regiones &gt; ${d.area_minima} px</th><th>Área media</th><th>Desv. área</th><th>Dim.</th></tr></thead>
+        <tbody>${filas}</tbody></table>
+      <div class="subhead">Datos del vector (semana10_features.npy)</div>
+      <table><thead><tr><th>Imagen</th><th>Dimensión</th><th>Mín</th><th>Máx</th><th>Media</th>
+        <th>Desviación</th><th>Pico intensidad</th><th>LBP no uniforme</th></tr></thead>
+        <tbody>${vectores}</tbody></table>
+      <div class="subhead">Código — src/semana10_texturas.py</div>
+      <pre class="code-block">${esc(d.codigo)}</pre>
+      <div class="subhead">Reporte — reports/semana10.md</div>
+      <div class="md">${mdToHtml(d.reporte)}</div>
+    `;
+  },
 };
 
 /* ============================== ACCIONES ============================== */
 function emptyPaneMsg(msg){ $('resultPane').innerHTML = `<div class="status error">${esc(msg)}</div>`; }
+
+/* ------------- Semana 10: carga de artefactos y markdown -------------- */
+async function cargarSemana10(){
+  if (state.semana10 || state.semana10Loading) return;
+  state.semana10Loading = true;
+  try {
+    const res = await fetch('/api/semana10');
+    state.semana10 = await res.json();
+  } catch(err){
+    state.semana10 = { disponible: false, detalle: String(err.message || err) };
+  } finally {
+    state.semana10Loading = false;
+    if (state.activeWeek === 10) renderPane();
+  }
+}
+
+function mostrarSemana10(){
+  document.getElementById('semanas').scrollIntoView({behavior:'smooth'});
+  const weeks = { 10: { sub: 'Semana 10', label: 'Texturas',
+                        render: () => renderers[10]() } };
+  state.mode = 'semana10';
+  setWeeks(weeks, 10, 'Semana 10 · Texturas');
+  setStatus('Semana 10 — reconocimiento de imágenes (texturas).', 'ok');
+}
+
+/* Conversor mínimo de Markdown a HTML (títulos, tablas, listas, negrita y
+   código). Suficiente para renderizar reports/semana10.md sin dependencias. */
+function mdToHtml(md){
+  const lines = (md || '').replace(/\r\n/g, '\n').split('\n');
+  const inline = (s) => esc(s)
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>');
+  const cells = (l) => l.trim().replace(/^\|/, '').replace(/\|$/, '')
+    .split('|').map(c => c.trim());
+  const isSep = (l) => /^\s*\|?[\s:|-]+\|?\s*$/.test(l) && l.includes('-');
+  let html = '', i = 0;
+  while (i < lines.length){
+    const line = lines[i];
+    if (!line.trim()){ i++; continue; }
+    if (/^```/.test(line.trim())){
+      const buf = []; i++;
+      while (i < lines.length && !/^```/.test(lines[i].trim())){ buf.push(lines[i]); i++; }
+      i++;
+      html += `<pre><code>${esc(buf.join('\n'))}</code></pre>`;
+      continue;
+    }
+    const h = /^(#{1,6})\s+(.*)$/.exec(line);
+    if (h){
+      const lvl = Math.min(h[1].length, 4);
+      html += `<h${lvl}>${inline(h[2])}</h${lvl}>`; i++; continue;
+    }
+    if (line.trim().startsWith('|') && i + 1 < lines.length && isSep(lines[i + 1])){
+      const head = cells(line); i += 2; const rows = [];
+      while (i < lines.length && lines[i].trim().startsWith('|')){ rows.push(cells(lines[i])); i++; }
+      html += '<table><thead><tr>' + head.map(c => `<th>${inline(c)}</th>`).join('') + '</tr></thead><tbody>';
+      html += rows.map(r => '<tr>' + r.map(c => `<td>${inline(c)}</td>`).join('') + '</tr>').join('');
+      html += '</tbody></table>';
+      continue;
+    }
+    if (/^[-*]\s+/.test(line)){
+      const items = [];
+      while (i < lines.length && /^[-*]\s+/.test(lines[i])){
+        items.push(inline(lines[i].replace(/^[-*]\s+/, ''))); i++;
+      }
+      html += '<ul>' + items.map(t => `<li>${t}</li>`).join('') + '</ul>';
+      continue;
+    }
+    const buf = [line]; i++;
+    while (i < lines.length && lines[i].trim()
+           && !/^(#{1,6})\s/.test(lines[i]) && !lines[i].trim().startsWith('|')
+           && !/^[-*]\s+/.test(lines[i]) && !/^```/.test(lines[i].trim())){
+      buf.push(lines[i]); i++;
+    }
+    html += `<p>${inline(buf.join(' '))}</p>`;
+  }
+  return html;
+}
 
 $('btnDiagnose').addEventListener('click', async () => {
   if (!state.file){ setStatus('Selecciona una imagen antes de diagnosticar.', 'error'); return; }
@@ -768,6 +921,8 @@ $('btnDiagnose').addEventListener('click', async () => {
         };
       }
     });
+    weeks[10] = { sub: 'Semana 10', label: 'Texturas',
+                  render: () => renderers[10]() };
     state.mode = 'imagen';
     setWeeks(weeks, 2, `Imagen · ${data.clase} — ${pct(data.confianza)}`);
     setStatus(`Diagnóstico completo: ${data.clase} — ${pct(data.confianza)}`, 'ok');
@@ -797,6 +952,10 @@ async function consultar(){
         sub: 'Semana 05', label: 'Sistema híbrido',
         badge: 'en ejecución',
         render: () => renderers[5](data),
+      },
+      10: {
+        sub: 'Semana 10', label: 'Texturas',
+        render: () => renderers[10](),
       }
     };
     state.mode = 'texto';
@@ -815,6 +974,8 @@ $('navConsult').addEventListener('click', () => {
   document.getElementById('diagnostico').scrollIntoView({behavior:'smooth'});
   $('symptoms').focus();
 });
+$('navSemana10').addEventListener('click', (e) => { e.preventDefault(); mostrarSemana10(); });
+$('footSemana10').addEventListener('click', (e) => { e.preventDefault(); mostrarSemana10(); });
 $('symptoms').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) consultar();
 });
@@ -839,6 +1000,8 @@ fetch('/api/health').then(r => r.json()).then(h => {
   const red = h.modelo_semana08 ? 'S8 lista' : 'S8 no disponible';
   setStatus(`Backend activo · modelo S2 ${h.modelo_semana02 ? 'cargado' : 'no disponible'} · ${red}`, h.pipeline ? 'ok' : 'error');
 }).catch(() => setStatus('No se pudo contactar el backend.', 'error'));
+
+cargarSemana10();
 </script>
 </body>
 </html>

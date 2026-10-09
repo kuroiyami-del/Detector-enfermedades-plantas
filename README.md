@@ -100,6 +100,17 @@ Los datos se encuentran separados en los archivos CSV dentro de `data/processed/
 - **Relacion con las semanas previas:** la semana 07 estima manchas con la desviacion global de la imagen (un solo numero para toda la foto); la semana 09 la sustituye por una segmentacion que si ubica y mide. El `bbox` de la hoja sirve como recorte de region de interes antes de clasificar con la red de la semana 08.
 - **Ejecucion:** `python -m src.semana09_vision`
 
+### Semana 10 - Reconocimiento de imagenes (histogramas, regiones y textura)
+
+- **Area:** Vision por computador (procesamiento de imagenes).
+- **Problema:** describir una hoja con un vector compacto a partir de su segmentacion, su histograma de intensidad y su textura.
+- **Metodo:** `imagen -> escala de grises -> umbral de Otsu -> measure.label -> regiones (area > 50 px) -> histograma de intensidad (32 bins, density=True) -> textura LBP (radius=2, points=16, method="uniform") -> vector de 53 valores` con `scikit-image`.
+- **Vector:** `3` (area media, desviacion estandar del area y cantidad de regiones) `+ 32` (histograma de intensidad) `+ 18` (histograma LBP) `= 53`.
+- **Comparacion:** dos imagenes del dominio: `data/imagen_proyecto.png` (tomate con septoria) y `data/imagen_proyecto_2.png` (tomate sana, PlantVillage). La hoja enferma se fragmenta en 5 regiones de tamanos dispares; la sana forma una sola region homogenea.
+- **Artefactos:** `artifacts/semana10_features.npy` (vector e histogramas por imagen) y `artifacts/semana10_histograma.png` (figura comparativa).
+- **Reporte:** `reports/semana10.md`.
+- **Ejecucion:** `python -m src.semana10_texturas`
+
 ## Estructura del proyecto
 
 ```
@@ -108,6 +119,7 @@ plantas_enfermas/
 │   ├── raw/PlantVillage-Dataset/raw/color/   # 38 carpetas con imagenes JPG
 │   ├── processed/                             # CSVs y class_map.json
 │   ├── imagen_proyecto.png                    # Imagen de entrada (semana 09)
+│   ├── imagen_proyecto_2.png                  # Segunda imagen de dominio (semana 10)
 │   └── base_conocimiento.txt                  # Base de conocimiento (semana 05)
 ├── src/
 │   ├── __init__.py
@@ -120,11 +132,13 @@ plantas_enfermas/
 │   ├── semana07_representaciones.py # Representaciones: numerica + simbolica + automata
 │   ├── semana08_red_ontologia.py    # Red neuronal MLP + evidencia SQLite + ontologia
 │   ├── semana09_vision.py          # Caracteristicas + Canny + Otsu + regiones
+│   ├── semana10_texturas.py        # Otsu + medidas de region + histograma + LBP
 │   └── pipeline.py                 # Pipeline integrada image→prediccion→plan
+├── reports/                        # Reportes por semana (semana10.md)
 ├── main.py                         # Punto de entrada (CLI)
 ├── server.py                       # Backend web (Flask) que sirve index.html
 ├── index.html                      # Interfaz web (diagnostico + barra de semanas)
-├── artifacts/                      # Artefactos semana 08/09 (modelo, BD, ontologia, panel)
+├── artifacts/                      # Artefactos semana 08/09/10 (modelo, BD, ontologia, paneles)
 ├── requirements.txt
 └── README.md
 ```
@@ -198,7 +212,7 @@ clase detectada con confianza, taxonomia y plan de recuperacion (A*).
 | `python main.py` | Abre el selector de foto y predice (por defecto) |
 | `python main.py ruta/imagen.jpg` | Predice directamente esa imagen |
 | `python main.py --test` | Predice una imagen de ejemplo del test set (muestra clase real) |
-| `python main.py --semanas` | Ejecuta las 6 semanas por separado |
+| `python main.py --semanas` | Ejecuta las semanas por separado |
 
 ### Ejecutar modulos individuales
 
@@ -211,6 +225,7 @@ python -m src.semana05_sistema_hibrido
 python -m src.semana07_representaciones
 python -m src.semana08_red_ontologia
 python -m src.semana09_vision
+python -m src.semana10_texturas
 ```
 
 > **Nota:** Los modulos individuales deben ejecutarse con `python -m src.<nombre>` desde la raiz del proyecto. No usar `python src/<nombre>.py` porque los imports no funcionarian.

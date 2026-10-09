@@ -9,5 +9,6 @@ artifacts/web_semana09_panel.png
 
 data/*
 !data/imagen_proyecto.png
+!data/imagen_proyecto_2.png
 AI_CODING_RULES.md
 venv/

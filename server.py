@@ -63,6 +63,7 @@ def pipeline():
                 representacion_simbolica,
             )
             import src.semana09_vision as semana09_vision
+            import src.semana10_texturas as semana10_texturas
 
             _PIPELINE = {
                 "load_model": load_model,
@@ -76,6 +77,7 @@ def pipeline():
                 "distancia_hoja_sana": distancia_hoja_sana,
                 "representacion_simbolica": representacion_simbolica,
                 "semana09_vision": semana09_vision,
+                "semana10_texturas": semana10_texturas,
             }
         except Exception as exc:  # pragma: no cover
             _PIPELINE_ERROR = str(exc)
@@ -181,6 +183,97 @@ def health():
         "modelo_semana08": red is not None,
         "modelo_semana08_error": red_err,
         "vision": "semana09_vision" in (pipeline() or {}),
+        "texturas": _semana10_disponible(),
+    })
+
+
+def _semana10_disponible():
+    """Indica si los artefactos de la semana 10 ya se generaron."""
+    try:
+        from src.config import ARTIFACTS_DIR
+
+        return ((ARTIFACTS_DIR / "semana10_features.npy").exists()
+                and (ARTIFACTS_DIR / "semana10_histograma.png").exists())
+    except Exception:
+        return False
+
+
+@app.route("/api/semana10")
+def semana10():
+    """Devuelve los artefactos de la semana 10.
+
+    Reune el codigo fuente del modulo, la figura comparativa, el resumen del
+    vector guardado en artifacts/semana10_features.npy y el contenido del
+    reporte reports/semana10.md, sin recalcular nada.
+    """
+    from src.config import ARTIFACTS_DIR, ROOT
+
+    ruta_features = ARTIFACTS_DIR / "semana10_features.npy"
+    ruta_hist = ARTIFACTS_DIR / "semana10_histograma.png"
+    ruta_codigo = ROOT / "src" / "semana10_texturas.py"
+    ruta_reporte = ROOT / "reports" / "semana10.md"
+
+    if np is None:
+        return jsonify({"disponible": False, "detalle": "numpy no disponible"})
+    if not ruta_features.exists() or not ruta_hist.exists():
+        return jsonify({
+            "disponible": False,
+            "detalle": ("Faltan artifacts/semana10_features.npy o "
+                        "artifacts/semana10_histograma.png. Ejecuta: "
+                        "python -m src.semana10_texturas"),
+        })
+
+    datos = np.load(ruta_features, allow_pickle=True).item()
+
+    imagenes = []
+    for im in datos.get("imagenes", []):
+        vector = np.asarray(im["vector"], dtype=float)
+        hist_int = np.asarray(im["histograma_intensidad"], dtype=float)
+        hist_lbp = np.asarray(im["histograma_lbp"], dtype=float)
+        imagenes.append({
+            "nombre": im["nombre"],
+            "ruta": im["ruta"],
+            "umbral_otsu": float(im["umbral_otsu"]),
+            "total_regiones": int(im["total_regiones"]),
+            "cantidad_regiones": int(im["cantidad_regiones"]),
+            "area_media": float(im["area_media"]),
+            "area_desviacion": float(im["area_desviacion"]),
+            "dimension": int(vector.size),
+            "resumen_vector": {
+                "min": float(vector.min()),
+                "max": float(vector.max()),
+                "media": float(vector.mean()),
+                "desviacion": float(vector.std()),
+                "primeros": [float(x) for x in vector[:3]],
+            },
+            "histograma_intensidad_pico": {
+                "bin": int(np.argmax(hist_int)),
+                "valor": float(hist_int.max()),
+            },
+            "lbp_no_uniforme": float(hist_lbp[-1]),
+        })
+
+    with open(ruta_hist, "rb") as fh:
+        histograma_b64 = base64.b64encode(fh.read()).decode("ascii")
+
+    codigo = ruta_codigo.read_text(encoding="utf-8") if ruta_codigo.exists() else ""
+    reporte = ruta_reporte.read_text(encoding="utf-8") if ruta_reporte.exists() else ""
+
+    return jsonify({
+        "disponible": True,
+        "dimension": int(datos.get("dimension", 0)),
+        "area_minima": int(datos.get("area_minima", 0)),
+        "lbp": datos.get("lbp", {}),
+        "imagenes": imagenes,
+        "histograma": histograma_b64,
+        "codigo": codigo,
+        "reporte": reporte,
+        "archivos": {
+            "features": "artifacts/semana10_features.npy",
+            "histograma": "artifacts/semana10_histograma.png",
+            "codigo": "src/semana10_texturas.py",
+            "reporte": "reports/semana10.md",
+        },
     })
 
 
