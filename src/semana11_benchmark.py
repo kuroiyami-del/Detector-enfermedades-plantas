@@ -13,40 +13,31 @@ from src.config import ARTIFACTS_DIR, RANDOM_STATE, RAW_DIR
 
 # ---------------------------------------------------------------------------
 # 1. CONFIGURACION Y CONSTANTES
-# La semana 11 compara tres modelos de clasificacion sobre el MISMO dataset de
-# plantas: Logistic Regression, Random Forest y MLPClassifier.
 # ---------------------------------------------------------------------------
 
-# Las 38 clases de PlantVillage: cada carpeta de RAW_DIR es una categoria.
+# Cada carpeta de RAW_DIR es una clase de PlantVillage.
 CLASES = sorted(carpeta.name for carpeta in RAW_DIR.iterdir() if carpeta.is_dir())
 
-# Mismo preprocesamiento de la semana 08: escala de grises 48x48, lo que deja
-# 48 * 48 = 2304 caracteristicas por imagen. Los 3 modelos reciben lo mismo.
+# Grises 48x48: 2304 caracteristicas, igual que la semana 08.
 TAMANO_IMAGEN = 48
 
-# Se toma un maximo de imagenes por clase para que el benchmark corra en
-# minutos y no en horas, manteniendo las 38 clases en la misma proporcion.
+# Maximo de imagenes por clase para que el benchmark corra en minutos.
 IMAGENES_POR_CLASE = 250
 PORCION_PRUEBA = 0.20
 
-# La practica pide ejecutar las pruebas minimo 3 veces. Cada corrida entrena
-# los 3 modelos desde cero con una semilla distinta, para que las variaciones
-# entre corridas sean reales y no repeticiones del mismo resultado.
+# 3 corridas con semillas 42, 43 y 44: variaciones reales entre corridas.
 NUMERO_CORRIDAS = 3
-SEMILLA_BASE = RANDOM_STATE  # 42; las corridas usan 42, 43 y 44
+SEMILLA_BASE = RANDOM_STATE
 
-# Artefacto de la semana: tabla con el resultado de cada corrida.
+# Artefacto de la semana.
 RUTA_BENCHMARK = ARTIFACTS_DIR / "benchmark.csv"
 
 
 # ---------------------------------------------------------------------------
-# 2. PREPARACION DE DATOS
-# La division entrenamiento/prueba se hace UNA SOLA vez, antes del benchmark.
-# Los 3 modelos en las 3 corridas usan exactamente la misma division, como
-# pide la practica: mismo conjunto de datos y misma division para todos.
+# 2. PREPARACION DE DATOS (mismo dataset y misma division para los 3 modelos)
 # ---------------------------------------------------------------------------
 
-# Convierte una imagen en el vector de entrada comun de los modelos.
+# Grises 48x48, aplana la matriz y normaliza a 0..1.
 def vectorizar_imagen(ruta):
     with Image.open(ruta) as foto:
         pixeles = np.asarray(
@@ -55,7 +46,7 @@ def vectorizar_imagen(ruta):
     return pixeles.ravel() / 255.0
 
 
-# Lee hasta IMAGENES_POR_CLASE fotos de cada clase y arma el dataset.
+# Hasta IMAGENES_POR_CLASE fotos por clase, con su id como etiqueta.
 def cargar_dataset():
     archivos_por_clase = [
         sorted((RAW_DIR / carpeta).glob("*.jpg"))[:IMAGENES_POR_CLASE]
@@ -80,7 +71,7 @@ def cargar_dataset():
     return X, y
 
 
-# Divide el dataset (una sola vez) en entrenamiento y prueba.
+# Division estratificada 80/20 calculada una sola vez.
 def dividir_datos(X, y):
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=PORCION_PRUEBA,
@@ -93,10 +84,9 @@ def dividir_datos(X, y):
 
 # ---------------------------------------------------------------------------
 # 3. MODELOS DEL BENCHMARK
-# Una funcion por modelo. Cada corrida crea instancias nuevas (nunca se
-# reutiliza un modelo ya entrenado) y la semilla cambia por corrida.
 # ---------------------------------------------------------------------------
 
+# Instancias nuevas por corrida; la semilla cambia en cada corrida.
 def crear_modelos(semilla):
     return {
         "logistic_regression": LogisticRegression(max_iter=500,
@@ -104,17 +94,14 @@ def crear_modelos(semilla):
         "random_forest": RandomForestClassifier(n_estimators=150,
                                                 n_jobs=-1,
                                                 random_state=semilla),
-        # Misma arquitectura de la semana 08: capas ocultas de 128 y 64.
-        # max_iter de 100 balances: mas iteraciones podrian duplicar el tiempo
-        # del benchmark por una mejora de accuracy marginal para la practica.
+        # Arquitectura de la semana 08: capas 128 y 64.
         "mlp_classifier": MLPClassifier(hidden_layer_sizes=(128, 64),
                                         max_iter=100,
                                         random_state=semilla),
     }
 
 
-# Entrena un modelo midiendo SOLO el tiempo del fit(), predice sobre el
-# conjunto de prueba ya fijo y calcula el accuracy.
+# Entrena midiendo solo el fit() y calcula accuracy sobre el test fijo.
 def entrenar_y_medir(nombre, semilla, corrida, datos):
     X_train, X_test, y_train, y_test = datos
     modelo = crear_modelos(semilla)[nombre]
@@ -135,9 +122,9 @@ def entrenar_y_medir(nombre, semilla, corrida, datos):
 
 # ---------------------------------------------------------------------------
 # 4. EJECUCION DEL BENCHMARK
-# Por cada corrida se recorren los 3 modelos con instancia y semilla nuevas.
 # ---------------------------------------------------------------------------
 
+# 3 corridas x 3 modelos; instancia y semilla nuevas en cada corrida.
 def ejecutar_corridas(datos):
     filas = []
     for corrida in range(1, NUMERO_CORRIDAS + 1):
@@ -150,7 +137,7 @@ def ejecutar_corridas(datos):
     return filas
 
 
-# Guarda el detalle de las corridas en artifacts/benchmark.csv.
+# Guarda el detalle de corridas en artifacts/benchmark.csv.
 def guardar_csv(filas):
     tabla = pd.DataFrame(filas)
     tabla.to_csv(RUTA_BENCHMARK, index=False)
@@ -158,8 +145,7 @@ def guardar_csv(filas):
           f"({len(tabla)} filas)")
 
 
-# Resumen por modelo: promedio y variacion (desviacion) de las corridas,
-# mas la diferencia de accuracy entre el mejor modelo y los demas.
+# Promedio y desviacion por modelo, mas la diferencia contra el mejor.
 def mostrar_resumen(filas):
     tabla = pd.DataFrame(filas)
     resumen = tabla.groupby("modelo").agg(
@@ -186,14 +172,11 @@ def run():
     print(f"  Corridas: {NUMERO_CORRIDAS} (semillas "
           f"{SEMILLA_BASE}..{SEMILLA_BASE + NUMERO_CORRIDAS - 1})")
 
-    # 1. Datos: el mismo dataset y la misma division para los 3 modelos.
     X, y = cargar_dataset()
     datos = dividir_datos(X, y)
 
-    # 2. Benchmark: 3 corridas x 3 modelos con instancias nuevas.
     filas = ejecutar_corridas(datos)
 
-    # 3. Artefacto y resumen con las variaciones entre corridas.
     guardar_csv(filas)
     mostrar_resumen(filas)
 
