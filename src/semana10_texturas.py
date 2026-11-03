@@ -37,9 +37,7 @@ LBP_POINTS = 16
 LBP_METHOD = "uniform"
 
 
-# Carga una imagen y la devuelve en escala de grises en el rango 0..1.
-# Acepta RGB, escala de grises o RGBA: la conversion a gris deja un solo canal
-# de intensidad, que es lo que necesitan Otsu, el histograma y el LBP.
+# Carga la imagen y la pasa a escala de grises.
 def cargar_imagen(ruta):
     imagen = io.imread(ruta)
     if np.issubdtype(imagen.dtype, np.integer):
@@ -51,28 +49,20 @@ def cargar_imagen(ruta):
     return color.rgb2gray(imagen)
 
 
-# Calcula el umbral de Otsu sobre la intensidad y separa objeto y fondo.
-# Otsu elige automaticamente el umbral que maximiza la separacion entre dos
-# grupos de pixeles; aqui los pixeles por encima del umbral son el objeto
-# (en estas hojas, la parte mas clara/brillante) y el resto es el fondo.
+# Otsu corta la imagen y separa la hoja del fondo.
 def calcular_umbral_otsu(gris):
     umbral = float(filters.threshold_otsu(gris))
     mascara = gris > umbral
     return umbral, mascara
 
 
-# Etiqueta cada grupo de pixeles conectados de la mascara con measure.label.
-# Devuelve la matriz de etiquetas (cada region con un id) y cuantas regiones
-# se encontraron en total, antes de aplicar ningun filtro de area.
+# Numera cada grupo de pixeles conectados de la hoja.
 def etiquetar_regiones(mascara):
     etiquetas, total = measure.label(mascara, return_num=True)
     return etiquetas, int(total)
 
 
-# Filtra las regiones con area mayor a AREA_MINIMA y resume su tamano.
-# Devuelve cuantas regiones pasan el filtro, el area media y la desviacion
-# estandar de esas areas. El area media dice que tan grande es una region
-# tipica; la desviacion, si el tamano es homogeneo o muy variable.
+# Cuenta las regiones grandes: area media y variacion.
 def estadisticas_regiones(etiquetas):
     areas = np.array([region.area for region in measure.regionprops(etiquetas)])
     areas = areas[areas > AREA_MINIMA]
@@ -87,20 +77,13 @@ def estadisticas_regiones(etiquetas):
     }
 
 
-# Histograma de intensidad con 32 intervalos. density=True normaliza el
-# histograma para que el area bajo la curva sume 1, de modo que dos imagenes
-# de distinto tamano se puedan comparar en la misma escala.
+# Cuenta cuanto hay de cada tono de gris.
 def histograma_intensidad(gris):
     histograma, _ = np.histogram(gris, bins=BINS_INTENSIDAD, density=True)
     return histograma
 
 
-# Calcula la textura LBP (patrones binarios locales) y su histograma.
-# LBP compara cada pixel con sus vecinos: radius=2 define la distancia al
-# vecino y points=16 cuantos vecinos se usan. method="uniform" agrupa los
-# patrones con pocos cambios de 0 a 1, que son los mas frecuentes en texturas
-# reales, y deja en un unico grupo los no uniformes. Con 16 puntos hay
-# points + 2 = 18 valores posibles, por eso el histograma usa 18 intervalos.
+# Compara cada pixel con sus vecinos para medir la textura.
 def textura_lbp(gris):
     # LBP compara valores entre pixeles vecinos: en una imagen float 0..1
     # diferencias minimas de redondeo cambiarian el patron. Por eso se pasa a
@@ -116,9 +99,7 @@ def textura_lbp(gris):
     return lbp, histograma
 
 
-# Concatena todo en un unico vector de caracteristicas por imagen:
-# [area media, desviacion de area, cantidad de regiones, histograma de
-#  intensidad (32), histograma LBP (18)].
+# Une todos los numeros y forma la ficha de 53 valores.
 def construir_vector(estadisticas, hist_intensidad, hist_lbp):
     return np.concatenate([
         np.array([estadisticas["area_media"],
@@ -129,9 +110,7 @@ def construir_vector(estadisticas, hist_intensidad, hist_lbp):
     ])
 
 
-# Aplica el pipeline completo a una imagen y devuelve todos sus resultados.
-# Es el punto de entrada reutilizable: run() y el backend usan esta funcion
-# en lugar de repetir los pasos.
+# Ejecuta todo el proceso completo para una sola imagen.
 def analizar_imagen(ruta, nombre=None):
     gris = cargar_imagen(ruta)
     umbral, mascara = calcular_umbral_otsu(gris)
@@ -154,9 +133,7 @@ def analizar_imagen(ruta, nombre=None):
     }
 
 
-# Figura comparativa 2x3: por cada imagen, el original, el histograma de
-# intensidad y el histograma de textura LBP. Deja la evidencia visual de la
-# comparacion entre las dos imagenes del dominio.
+# Guarda la figura comparativa entre las dos imagenes.
 def generar_figura(resultados, salida):
     fig, axes = plt.subplots(len(resultados), 3,
                              figsize=(13, 4.2 * len(resultados)))
@@ -198,9 +175,7 @@ def generar_figura(resultados, salida):
     plt.close(fig)
 
 
-# Guarda en un unico .npy los vectores y los datos de las dos imagenes.
-# Se guarda como diccionario porque cada imagen aporta su vector y sus
-# histogramas; el backend y la interfaz leen de aqui sin recalcular nada.
+# Guarda las fichas de las imagenes en un archivo .npy.
 def guardar_features(resultados, salida):
     datos = {
         "dimension": int(resultados[0]["vector"].size),
@@ -230,7 +205,7 @@ def guardar_features(resultados, salida):
     return datos
 
 
-# Imprime, por cada imagen, el umbral, las regiones y la dimension del vector.
+# Muestra el resumen de cada imagen en consola.
 def imprimir_resumen(resultados):
     for resultado in resultados:
         regiones = resultado["regiones"]
@@ -247,8 +222,7 @@ def imprimir_resumen(resultados):
         print(f"  DIMENSION DEL VECTOR: {resultado['dimension']}")
 
 
-# Ejecuta el pipeline completo, guarda los artefactos e imprime la evidencia.
-# run() solo coordina: cada paso vive en su propia funcion.
+# Coordina el proceso, guarda artefactos y muestra resultados.
 def run():
     print("=" * 70)
     print("SEMANA 10 - RECONOCIMIENTO DE IMAGENES: HEURISTICAS DE TEXTURA")

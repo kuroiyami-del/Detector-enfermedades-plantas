@@ -247,6 +247,43 @@ tr.hit td{background:rgba(191,179,59,.25);}
 .img-grid figcaption{font-family:var(--font-hellenictypewriter);font-size:12px;
   padding:6px 8px;border-top:1px solid var(--color-ink-black);}
 
+/* ---------- Semana 10: código y reporte ---------- */
+.code-block{
+  max-height:420px;overflow:auto;border:1px solid var(--color-ink-black);
+  background:rgba(232,209,235,.22);padding:16px;margin:0;
+  font-family:var(--font-hellenictypewriter);font-size:12px;line-height:1.5;
+  white-space:pre;tab-size:4;
+}
+.code-block code{font-family:inherit;}
+.markdown{font-size:15px;line-height:1.65;max-width:90ch;}
+.markdown h1,.markdown h2,.markdown h3,.markdown h4{
+  font-family:var(--font-hellenictypewriter);font-weight:500;
+  margin:24px 0 10px;line-height:1.25;
+}
+.markdown h1{font-size:24px;}
+.markdown h2{font-size:20px;}
+.markdown h3,.markdown h4{font-size:17px;}
+.markdown p{margin:0 0 12px;}
+.markdown ul,.markdown ol{margin:0 0 14px 22px;padding:0;}
+.markdown li{margin:4px 0;}
+.markdown code{
+  font-family:var(--font-hellenictypewriter);font-size:12px;
+  background:rgba(232,209,235,.6);padding:1px 4px;
+}
+.markdown pre.md-code{
+  border:1px solid var(--color-ink-black);background:rgba(2,80,80,.06);
+  padding:12px;overflow:auto;margin:0 0 16px;
+  font-family:var(--font-hellenictypewriter);font-size:12px;line-height:1.5;
+}
+.markdown pre.md-code code{background:none;padding:0;font-family:inherit;}
+.markdown table{margin:8px 0 18px;}
+.markdown blockquote{
+  margin:0 0 14px;padding:8px 14px;border-left:4px solid var(--color-golden-olive);
+  background:rgba(232,209,235,.3);
+}
+.markdown hr{border:none;border-top:1px solid rgba(34,34,34,.25);margin:20px 0;}
+.markdown a{color:var(--color-deep-teal);}
+
 .empty{
   display:flex;align-items:center;justify-content:center;height:100%;
   min-height:360px;text-align:center;flex-direction:column;gap:16px;
@@ -575,6 +612,122 @@ function tableTop3(top3){
     `</tbody></table>`;
 }
 
+/* ---------------------- Markdown mínimo para reportes ---------------------- */
+function mdInline(text){
+  const code = [];
+  let s = esc(text).replace(/`([^`]+)`/g, (_, c) => {
+    code.push(c);
+    return `\u0000${code.length - 1}\u0000`;
+  });
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>');
+  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, label, href) => {
+    if (!/^(https?:\/\/|#|\/)/.test(href)) return m;
+    return `<a href="${href}" target="_blank" rel="noopener">${label}</a>`;
+  });
+  return s.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${code[Number(i)]}</code>`);
+}
+
+function renderMarkdown(md){
+  if (!md) return '<p class="mono muted">Reporte no disponible.</p>';
+  const lines = String(md).replace(/\r\n/g, '\n').split('\n');
+  const out = [];
+  const tableSep = (line) => /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line);
+  const cells = (line) => line.trim().replace(/^\|/, '').replace(/\|$/, '')
+    .split('|').map(c => c.trim());
+  let i = 0;
+
+  while (i < lines.length){
+    const line = lines[i];
+
+    if (/^\s*```/.test(line)){
+      i++;
+      const code = [];
+      while (i < lines.length && !/^\s*```/.test(lines[i])){ code.push(lines[i]); i++; }
+      if (i < lines.length) i++;
+      out.push(`<pre class="md-code"><code>${esc(code.join('\n'))}</code></pre>`);
+      continue;
+    }
+
+    if (/^\s*$/.test(line)){ i++; continue; }
+
+    const heading = line.match(/^(#{1,6})\s+(.*)$/);
+    if (heading){
+      const level = Math.min(heading[1].length + 1, 6);
+      out.push(`<h${level}>${mdInline(heading[2].trim())}</h${level}>`);
+      i++;
+      continue;
+    }
+
+    if (/^\s*[-*_]\s*[-*_]\s*[-*_][-*_\s]*$/.test(line)){
+      out.push('<hr>');
+      i++;
+      continue;
+    }
+
+    if (/^\s*[-*]\s+/.test(line) || /^\s*\d+\.\s+/.test(line)){
+      const ordered = /^\s*\d+\.\s+/.test(line);
+      const items = [];
+      while (i < lines.length){
+        const item = lines[i].match(/^\s*(?:[-*]|\d+\.)\s+(.*)$/);
+        if (item){ items.push(item[1].trim()); i++; continue; }
+        if (/^\s*$/.test(lines[i])) break;
+        if (/^\s{2,}\S/.test(lines[i]) && items.length){
+          items[items.length - 1] += ' ' + lines[i].trim();
+          i++;
+          continue;
+        }
+        break;
+      }
+      out.push(`<${ordered ? 'ol' : 'ul'}>` +
+        items.map(it => `<li>${mdInline(it)}</li>`).join('') +
+        `</${ordered ? 'ol' : 'ul'}>`);
+      continue;
+    }
+
+    if (line.includes('|') && i + 1 < lines.length && tableSep(lines[i + 1])){
+      const header = cells(line);
+      i += 2;
+      const rows = [];
+      while (i < lines.length && lines[i].includes('|') && !/^\s*$/.test(lines[i])){
+        rows.push(cells(lines[i]));
+        i++;
+      }
+      out.push('<table><thead><tr>' +
+        header.map(h => `<th>${mdInline(h)}</th>`).join('') +
+        '</tr></thead><tbody>' +
+        rows.map(r => '<tr>' + header.map((_, j) =>
+          `<td>${mdInline(r[j] || '')}</td>`).join('') + '</tr>').join('') +
+        '</tbody></table>');
+      continue;
+    }
+
+    if (/^\s*>\s?/.test(line)){
+      const quote = [];
+      while (i < lines.length && /^\s*>\s?/.test(lines[i])){
+        quote.push(lines[i].replace(/^\s*>\s?/, ''));
+        i++;
+      }
+      out.push(`<blockquote>${mdInline(quote.join(' '))}</blockquote>`);
+      continue;
+    }
+
+    const para = [line.trim()];
+    i++;
+    while (i < lines.length && !/^\s*$/.test(lines[i]) &&
+           !/^\s*(#{1,6})\s+/.test(lines[i]) &&
+           !/^\s*```/.test(lines[i]) &&
+           !/^\s*[-*]\s+/.test(lines[i]) &&
+           !/^\s*\d+\.\s+/.test(lines[i]) &&
+           !(lines[i].includes('|') && i + 1 < lines.length && tableSep(lines[i + 1]))){
+      para.push(lines[i].trim());
+      i++;
+    }
+    out.push(`<p>${mdInline(para.join(' '))}</p>`);
+  }
+  return out.join('\n');
+}
+
 /* ============================ RENDER SEMANAS ============================ */
 const renderers = {
   2(d){
@@ -758,6 +911,11 @@ const renderers = {
       return `<div class="subhead">Semana 10 · Reconocimiento de imágenes — Texturas</div>
         <p class="mono muted">No disponible: ${esc(d.detalle || d.error || 'sin datos')}</p>`;
     }
+    const base = (state.semana10 && state.semana10.disponible) ? state.semana10 : null;
+    const codigo = d.codigo || (base && base.codigo) || '';
+    const reporte = d.reporte || (base && base.reporte) || '';
+    if (!codigo || !reporte) cargarSemana10();
+
     const filas = d.imagenes.map(im => `<tr>
         <td>${esc(im.nombre)}</td>
         <td>${Number(im.umbral_otsu).toFixed(4)}</td>
@@ -768,9 +926,11 @@ const renderers = {
         <td>${im.dimension}</td></tr>`).join('');
     const vectores = d.imagenes.map(im => {
       const r = im.resumen_vector;
+      const primeros = (r.primeros || []).map(x => Number(x).toFixed(2)).join(', ') || '—';
       return `<tr><td>${esc(im.nombre)}</td><td>${im.dimension}</td>
         <td>${Number(r.min).toFixed(4)}</td><td>${Number(r.max).toFixed(2)}</td>
         <td>${Number(r.media).toFixed(4)}</td><td>${Number(r.desviacion).toFixed(2)}</td>
+        <td>${primeros}</td>
         <td>pico ${im.histograma_intensidad_pico.bin} (${Number(im.histograma_intensidad_pico.valor).toFixed(3)})</td>
         <td>${Number(im.lbp_no_uniforme).toFixed(3)}</td></tr>`;
     }).join('');
@@ -785,6 +945,14 @@ const renderers = {
       ? `<p class="mono tiny muted">Se analizó la imagen que subiste y se comparó contra la hoja sana
       de referencia del proyecto (${esc(d.referencia || 'data/imagen_proyecto_2.png')}).</p>`
       : '';
+    const codigoHtml = codigo
+      ? `<pre class="code-block"><code>${esc(codigo)}</code></pre>`
+      : `<p class="mono muted">Código fuente no disponible. Ejecuta
+        <code>python -m src.semana10_texturas</code> y recarga la página.</p>`;
+    const reporteHtml = reporte
+      ? `<div class="markdown">${renderMarkdown(reporte)}</div>`
+      : `<p class="mono muted">Reporte no disponible. Ejecuta
+        <code>python -m src.semana10_texturas</code> y recarga la página.</p>`;
     return `
       <div class="subhead">${esc(titulo)}</div>
       <p class="mono tiny muted">Vector de ${d.dimension} valores = 3 (área media, desviación y cantidad de regiones)
@@ -801,8 +969,13 @@ const renderers = {
         <tbody>${filas}</tbody></table>
       <div class="subhead">Datos del vector (semana10_features.npy)</div>
       <table><thead><tr><th>Imagen</th><th>Dimensión</th><th>Mín</th><th>Máx</th><th>Media</th>
-        <th>Desviación</th><th>Pico intensidad</th><th>LBP no uniforme</th></tr></thead>
+        <th>Desviación</th><th>Primeros 3</th><th>Pico intensidad</th><th>LBP no uniforme</th></tr></thead>
         <tbody>${vectores}</tbody></table>
+      <div class="divider"></div>
+      <div class="subhead">Código fuente (src/semana10_texturas.py)</div>
+      ${codigoHtml}
+      <div class="subhead">Reporte (reports/semana10.md)</div>
+      ${reporteHtml}
     `;
   },
 };

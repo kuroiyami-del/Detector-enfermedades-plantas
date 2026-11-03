@@ -107,7 +107,7 @@ Los datos se encuentran separados en los archivos CSV dentro de `data/processed/
 - **Metodo:** `imagen -> escala de grises -> umbral de Otsu -> measure.label -> regiones (area > 50 px) -> histograma de intensidad (32 bins, density=True) -> textura LBP (radius=2, points=16, method="uniform") -> vector de 53 valores` con `scikit-image`.
 - **Vector:** `3` (area media, desviacion estandar del area y cantidad de regiones) `+ 32` (histograma de intensidad) `+ 18` (histograma LBP) `= 53`.
 - **Comparacion:** dos imagenes del dominio: `data/imagen_proyecto.png` (tomate con septoria) y `data/imagen_proyecto_2.png` (tomate sana, PlantVillage). La hoja enferma se fragmenta en 5 regiones de tamanos dispares; la sana forma una sola region homogenea.
-- **Interfaz web:** al pulsar **Diagnosticar**, la pestana Semana 10 compara la imagen subida por el usuario contra la hoja sana de referencia (`data/imagen_proyecto_2.png`) y genera `artifacts/web_semana10_comparacion.png` con la figura de esa comparacion.
+- **Interfaz web:** al pulsar **Diagnosticar**, la pestana Semana 10 compara la imagen subida por el usuario contra la hoja sana de referencia (`data/imagen_proyecto_2.png`) y genera `artifacts/web_semana10_comparacion.png` con la figura de esa comparacion. La pestana tambien muestra el codigo fuente, el resumen del vector y el reporte `reports/semana10.md` renderizado.
 - **Artefactos:** `artifacts/semana10_features.npy` (vector e histogramas por imagen) y `artifacts/semana10_histograma.png` (figura comparativa).
 - **Reporte:** `reports/semana10.md`.
 - **Ejecucion:** `python -m src.semana10_texturas`
