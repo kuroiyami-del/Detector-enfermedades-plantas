@@ -6,6 +6,7 @@ y expone el mismo diagnostico de la interfaz anterior, llamando a las funciones
 ya existentes de los modulos src/semanaXX.py SIN modificarlos.
 
 Caso A (imagen):  semana02 + semana03 + semana04 + semana07 + semana08 + semana09
+                  + semana10 + semana11 (benchmark) + semana13 (motor de reglas)
 Caso B (texto):   semana05 (sistema hibrido) via answer()
 
 Ejecutar:  python server.py
@@ -13,9 +14,12 @@ Abrir:     http://127.0.0.1:5000
 """
 
 import base64
+import csv
 import io
 import os
+import statistics
 import sys
+import unicodedata
 
 # Permitir importar src/ y los modulos del proyecto desde cualquier cwd.
 _PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -64,6 +68,7 @@ def pipeline():
             )
             import src.semana09_vision as semana09_vision
             import src.semana10_texturas as semana10_texturas
+            import src.semana13_conocimiento as semana13_conocimiento
 
             _PIPELINE = {
                 "load_model": load_model,
@@ -78,6 +83,7 @@ def pipeline():
                 "representacion_simbolica": representacion_simbolica,
                 "semana09_vision": semana09_vision,
                 "semana10_texturas": semana10_texturas,
+                "semana13_conocimiento": semana13_conocimiento,
             }
         except Exception as exc:  # pragma: no cover
             _PIPELINE_ERROR = str(exc)
@@ -184,6 +190,8 @@ def health():
         "modelo_semana08_error": red_err,
         "vision": "semana09_vision" in (pipeline() or {}),
         "texturas": _semana10_disponible(),
+        "benchmark": _semana11_disponible(),
+        "conocimiento": "semana13_conocimiento" in (pipeline() or {}),
     })
 
 
@@ -194,6 +202,16 @@ def _semana10_disponible():
 
         return ((ARTIFACTS_DIR / "semana10_features.npy").exists()
                 and (ARTIFACTS_DIR / "semana10_histograma.png").exists())
+    except Exception:
+        return False
+
+
+def _semana11_disponible():
+    """Indica si el benchmark de la semana 11 ya se ejecuto."""
+    try:
+        from src.config import ARTIFACTS_DIR
+
+        return (ARTIFACTS_DIR / "benchmark.csv").exists()
     except Exception:
         return False
 
@@ -280,6 +298,98 @@ def _semana10_comparacion(ruta):
     }, None
 
 
+def _leer_texto(ruta):
+    """Lee un archivo de texto y devuelve cadena vacia si no existe."""
+    try:
+        return ruta.read_text(encoding="utf-8")
+    except Exception:
+        return ""
+
+
+def _semana11_resumen():
+    """Resume artifacts/benchmark.csv y adjunta codigo y reporte.
+
+    No vuelve a entrenar modelos: la semana 11 tarda minutos y depende del
+    dataset completo. La web solo presenta el artefacto real ya generado.
+    """
+    from src.config import ARTIFACTS_DIR, ROOT
+
+    ruta = ARTIFACTS_DIR / "benchmark.csv"
+    if not ruta.exists():
+        return {
+            "disponible": False,
+            "detalle": ("Falta artifacts/benchmark.csv. Ejecuta: "
+                        "python -m src.semana11_benchmark"),
+        }
+
+    corridas = []
+    with open(ruta, "r", encoding="utf-8", newline="") as fh:
+        for fila in csv.DictReader(fh):
+            try:
+                corridas.append({
+                    "corrida": int(fila["corrida"]),
+                    "modelo": fila["modelo"],
+                    "accuracy": float(fila["accuracy"]),
+                    "tiempo_entrenamiento_s": float(
+                        fila["tiempo_entrenamiento_s"]),
+                })
+            except (KeyError, TypeError, ValueError):
+                continue
+
+    if not corridas:
+        return {"disponible": False,
+                "detalle": "artifacts/benchmark.csv no contiene filas validas."}
+
+    grupos = {}
+    for fila in corridas:
+        grupos.setdefault(fila["modelo"], []).append(fila)
+
+    modelos = []
+    for nombre, filas in grupos.items():
+        accuracy = [fila["accuracy"] for fila in filas]
+        tiempos = [fila["tiempo_entrenamiento_s"] for fila in filas]
+        modelos.append({
+            "modelo": nombre,
+            "corridas": len(filas),
+            "accuracy_promedio": float(statistics.fmean(accuracy)),
+            "accuracy_desviacion": (
+                float(statistics.stdev(accuracy)) if len(accuracy) > 1 else 0.0
+            ),
+            "tiempo_promedio_s": float(statistics.fmean(tiempos)),
+            "tiempo_desviacion_s": (
+                float(statistics.stdev(tiempos)) if len(tiempos) > 1 else 0.0
+            ),
+        })
+
+    mejor = max(modelos, key=lambda m: m["accuracy_promedio"])
+    for modelo in modelos:
+        modelo["diferencia_vs_mejor"] = (
+            modelo["accuracy_promedio"] - mejor["accuracy_promedio"]
+        )
+    modelos.sort(key=lambda m: m["accuracy_promedio"], reverse=True)
+
+    return {
+        "disponible": True,
+        "modelos": modelos,
+        "corridas": corridas,
+        "mejor_modelo": mejor["modelo"],
+        "total_corridas": len(corridas),
+        "codigo": _leer_texto(ROOT / "src" / "semana11_benchmark.py"),
+        "reporte": _leer_texto(ROOT / "reports" / "semana11_adr.md"),
+        "archivos": {
+            "benchmark": "artifacts/benchmark.csv",
+            "codigo": "src/semana11_benchmark.py",
+            "reporte": "reports/semana11_adr.md",
+        },
+    }
+
+
+@app.route("/api/semana11")
+def semana11():
+    """Presenta el benchmark ya generado por la semana 11."""
+    return jsonify(_semana11_resumen())
+
+
 @app.route("/api/semana10")
 def semana10():
     """Devuelve los artefactos de la semana 10.
@@ -347,6 +457,159 @@ def semana10():
             "reporte": "reports/semana10.md",
         },
     })
+
+
+def _normalizar_categoria(texto):
+    """Pasa una categoria a minusculas sin acentos para comparar."""
+    return (unicodedata.normalize("NFKD", texto or "")
+            .encode("ascii", "ignore").decode("ascii").lower())
+
+
+def _hechos_semana13(categoria, confianza, plan, comparacion):
+    """Construye los hechos del motor a partir de las salidas reales.
+
+    La categoria viene de la semana 03, la confianza de la semana 02, el plan
+    de la semana 04 y las regiones visibles de la comparacion de la semana 10.
+    """
+    hechos = set()
+    cat = _normalizar_categoria(categoria)
+
+    if "fungic" in cat:
+        hechos.add("categoria_fungica")
+    elif "bacterian" in cat:
+        hechos.add("categoria_bacteriana")
+    elif "viral" in cat:
+        hechos.add("categoria_viral")
+    elif "plaga" in cat:
+        hechos.add("categoria_plaga")
+    elif "sana" in cat:
+        hechos.add("categoria_sana")
+    else:
+        hechos.add("categoria_desconocida")
+
+    try:
+        if float(confianza) >= 0.70:
+            hechos.add("confianza_alta")
+    except (TypeError, ValueError):
+        pass
+
+    es_enfermedad = any(clave in cat for clave in
+                        ("fungic", "bacterian", "viral", "plaga"))
+
+    regiones = 0
+    if isinstance(comparacion, dict):
+        imagenes = comparacion.get("imagenes") or []
+        if imagenes:
+            try:
+                regiones = int(imagenes[0].get("cantidad_regiones") or 0)
+            except (TypeError, ValueError):
+                regiones = 0
+    if es_enfermedad or regiones > 1:
+        hechos.add("danio_foliar_visible")
+
+    acciones = list(plan or [])
+    if acciones:
+        hechos.add("plan_disponible")
+        if len(acciones) >= 3:
+            hechos.add("plan_tres_acciones")
+    elif es_enfermedad:
+        hechos.add("meta_inalcanzable")
+
+    return hechos
+
+
+def _reglas_semana13_payload(reglas):
+    """Serializa la base de reglas para la interfaz web."""
+    return [
+        {
+            "nombre": regla.nombre,
+            "premisas": sorted(regla.premisas),
+            "conclusion": regla.conclusion,
+        }
+        for regla in reglas
+    ]
+
+
+def _escenario_semana13_payload(resultado):
+    """Serializa un ResultadoEscenario sin perder la traza ordenada."""
+    return {
+        "nombre": resultado.nombre,
+        "descripcion": resultado.descripcion,
+        "hechos_iniciales": sorted(resultado.hechos_iniciales),
+        "hechos_finales": sorted(resultado.hechos_finales),
+        "derivados": sorted(resultado.derivados),
+        "trazas": list(resultado.trazas),
+        "objetivo": resultado.objetivo,
+        "resultado": resultado.resultado,
+        "demostrada": resultado.objetivo in resultado.hechos_finales,
+        "reglas_ejecutadas": [
+            traza.split(":", 1)[0].strip() for traza in resultado.trazas
+        ],
+    }
+
+
+def _semana13_payload(s13, modo, reglas, resultados, hechos_generados=None):
+    """Empaqueta el motor, las reglas, los escenarios, el codigo y el reporte."""
+    from src.config import ROOT
+
+    return {
+        "disponible": True,
+        "modo": modo,
+        "objetivo": s13.OBJETIVO,
+        "reglas": _reglas_semana13_payload(reglas),
+        "escenarios": [
+            _escenario_semana13_payload(resultado) for resultado in resultados
+        ],
+        "hechos_generados": (
+            sorted(hechos_generados) if hechos_generados is not None else None
+        ),
+        "codigo": _leer_texto(ROOT / "src" / "semana13_conocimiento.py"),
+        "reporte": _leer_texto(ROOT / "reports" / "reporte_semana13.md"),
+        "archivos": {
+            "codigo": "src/semana13_conocimiento.py",
+            "reporte": "reports/reporte_semana13.md",
+        },
+    }
+
+
+def _semana13_desde_diagnostico(categoria, confianza, plan, comparacion):
+    """Ejecuta el motor con los hechos derivados del diagnostico por imagen."""
+    p = pipeline()
+    s13 = (p or {}).get("semana13_conocimiento")
+    if s13 is None:
+        return {
+            "disponible": False,
+            "detalle": "modulo de la semana 13 no disponible",
+        }
+
+    reglas = s13.construir_reglas()
+    hechos = _hechos_semana13(categoria, confianza, plan, comparacion)
+    resultado = s13.ejecutar_escenario(
+        "Imagen",
+        "diagnostico de la imagen subida",
+        hechos,
+        reglas,
+        s13.OBJETIVO,
+    )
+    return _semana13_payload(
+        s13, "diagnostico", reglas, [resultado], hechos_generados=hechos)
+
+
+@app.route("/api/semana13")
+def semana13_demo():
+    """Muestra el motor con los dos escenarios de demostracion del modulo."""
+    p = pipeline()
+    s13 = (p or {}).get("semana13_conocimiento")
+    if s13 is None:
+        return jsonify({
+            "disponible": False,
+            "detalle": _PIPELINE_ERROR or "modulo de la semana 13 no disponible",
+        })
+
+    reglas = s13.construir_reglas()
+    caso_a, caso_b = s13.ejecutar_casos(reglas)
+    return jsonify(_semana13_payload(
+        s13, "demo", reglas, [caso_a, caso_b]))
 
 
 @app.route("/api/diagnostico", methods=["POST"])
@@ -522,6 +785,14 @@ def diagnostico():
                 "no_disponible": True,
                 "detalle": error10,
             }
+
+        # --- Semana 11: benchmark (artefacto ya generado) -------------------
+        # No reentrena: el benchmark tarda minutos; se lee artifacts/benchmark.csv.
+        resultado["semanas"]["11"] = _semana11_resumen()
+
+        # --- Semana 13: hechos reales + reglas + decision de manejo --------
+        resultado["semanas"]["13"] = _semana13_desde_diagnostico(
+            category, float(confidence), plan, comparacion)
 
         return jsonify(resultado)
 

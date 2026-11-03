@@ -255,6 +255,13 @@ tr.hit td{background:rgba(191,179,59,.25);}
   white-space:pre;tab-size:4;
 }
 .code-block code{font-family:inherit;}
+details.fuente{margin:10px 0 18px;border:1px solid rgba(34,34,34,.35);}
+details.fuente summary{
+  cursor:pointer;padding:10px 12px;background:rgba(232,209,235,.35);
+  font-family:var(--font-hellenictypewriter);font-size:12px;
+}
+details.fuente .code-block{border:none;border-top:1px solid rgba(34,34,34,.35);}
+details.fuente .markdown{padding:14px 16px;}
 .markdown{font-size:15px;line-height:1.65;max-width:90ch;}
 .markdown h1,.markdown h2,.markdown h3,.markdown h4{
   font-family:var(--font-hellenictypewriter);font-weight:500;
@@ -328,7 +335,7 @@ footer{border-top:2px solid var(--color-ink-black);margin-top:var(--section-gap)
 <!-- ============ ANNOUNCEMENT ============ -->
 <div class="banner">
   <svg viewBox="0 0 24 24" fill="none" stroke="#222" stroke-width="1.6"><path d="M12 22V12M12 12C12 7 8 4 3 4c0 5 4 8 9 8zM12 12c0-5 4-8 9-8-5 0-9 3-9 8z"/></svg>
-  Diagnóstico botánico con inteligencia artificial · seis semanas de conocimiento en una sola página
+  Diagnóstico botánico con inteligencia artificial · diez semanas de conocimiento en una sola página
   <svg viewBox="0 0 24 24" fill="none" stroke="#222" stroke-width="1.6"><path d="M12 22V12M12 12C12 7 8 4 3 4c0 5 4 8 9 8zM12 12c0-5 4-8 9-8-5 0-9 3-9 8z"/></svg>
 </div>
 
@@ -488,6 +495,8 @@ footer{border-top:2px solid var(--color-ink-black);margin-top:var(--section-gap)
         <a href="#semanas">Semana 08 · Red + Ontología</a>
         <a href="#semanas">Semana 09 · Visión</a>
         <a href="#semanas" id="footSemana10">Semana 10 · Texturas</a>
+        <a href="#semanas" id="footSemana11">Semana 11 · Benchmark</a>
+        <a href="#semanas" id="footSemana13">Semana 13 · Motor de reglas</a>
         <a href="#semanas">Semana 05 · Sistema híbrido</a>
       </div>
     </div>
@@ -511,6 +520,10 @@ const state = {
   activeWeek: null,
   semana10: null,      // datos de /api/semana10 (se cargan una vez)
   semana10Loading: false,
+  semana11: null,      // benchmark de /api/semana11
+  semana11Loading: false,
+  semana13: null,      // demo de /api/semana13
+  semana13Loading: false,
 };
 
 /* ----------------------------- utilidades ----------------------------- */
@@ -911,11 +924,6 @@ const renderers = {
       return `<div class="subhead">Semana 10 · Reconocimiento de imágenes — Texturas</div>
         <p class="mono muted">No disponible: ${esc(d.detalle || d.error || 'sin datos')}</p>`;
     }
-    const base = (state.semana10 && state.semana10.disponible) ? state.semana10 : null;
-    const codigo = d.codigo || (base && base.codigo) || '';
-    const reporte = d.reporte || (base && base.reporte) || '';
-    if (!codigo || !reporte) cargarSemana10();
-
     const filas = d.imagenes.map(im => `<tr>
         <td>${esc(im.nombre)}</td>
         <td>${Number(im.umbral_otsu).toFixed(4)}</td>
@@ -945,14 +953,6 @@ const renderers = {
       ? `<p class="mono tiny muted">Se analizó la imagen que subiste y se comparó contra la hoja sana
       de referencia del proyecto (${esc(d.referencia || 'data/imagen_proyecto_2.png')}).</p>`
       : '';
-    const codigoHtml = codigo
-      ? `<pre class="code-block"><code>${esc(codigo)}</code></pre>`
-      : `<p class="mono muted">Código fuente no disponible. Ejecuta
-        <code>python -m src.semana10_texturas</code> y recarga la página.</p>`;
-    const reporteHtml = reporte
-      ? `<div class="markdown">${renderMarkdown(reporte)}</div>`
-      : `<p class="mono muted">Reporte no disponible. Ejecuta
-        <code>python -m src.semana10_texturas</code> y recarga la página.</p>`;
     return `
       <div class="subhead">${esc(titulo)}</div>
       <p class="mono tiny muted">Vector de ${d.dimension} valores = 3 (área media, desviación y cantidad de regiones)
@@ -971,11 +971,80 @@ const renderers = {
       <table><thead><tr><th>Imagen</th><th>Dimensión</th><th>Mín</th><th>Máx</th><th>Media</th>
         <th>Desviación</th><th>Primeros 3</th><th>Pico intensidad</th><th>LBP no uniforme</th></tr></thead>
         <tbody>${vectores}</tbody></table>
+    `;
+  },
+  11(d){
+    if (!d || d.disponible === false || d.no_disponible || !Array.isArray(d.modelos)){
+      return `<div class="subhead">Semana 11 · Benchmark de modelos</div>
+        <p class="mono muted">No disponible: ${esc((d && d.detalle) || 'sin datos')}</p>`;
+    }
+    const modelos = d.modelos || [];
+    const filas = modelos.map((m,i) => `<tr class="${i===0?'hit':''}">
+        <td>${i+1}</td>
+        <td><strong>${esc(m.modelo)}</strong></td>
+        <td>${pct(m.accuracy_promedio)} ± ${(m.accuracy_desviacion*100).toFixed(2)}</td>
+        <td>${Number(m.tiempo_promedio_s).toFixed(2)} s ± ${Number(m.tiempo_desviacion_s).toFixed(2)}</td>
+        <td>${m.corridas}</td>
+        <td>${m.diferencia_vs_mejor === 0 ? '—' : (m.diferencia_vs_mejor*100).toFixed(2) + ' pp'}</td>
+      </tr>`).join('');
+    const corridas = (d.corridas || []).map(c => `<tr>
+        <td>${c.corrida}</td><td>${esc(c.modelo)}</td>
+        <td>${pct(c.accuracy)}</td><td>${Number(c.tiempo_entrenamiento_s).toFixed(2)} s</td></tr>`).join('');
+    const mejor = modelos[0] || {};
+    const archivos = d.archivos || {};
+    return `
+      <div class="subhead">Semana 11 · Benchmark de modelos</div>
+      <div class="big-result">
+        <div><div class="label">Mejor modelo</div><div class="value">${esc(d.mejor_modelo)}</div></div>
+        <div style="min-width:260px"><div class="label">Accuracy promedio</div>
+          <div class="value">${pct(mejor.accuracy_promedio || 0)}</div>${confBar(mejor.accuracy_promedio || 0)}</div>
+      </div>
+      <p class="mono tiny muted">${modelos.length} modelos · ${d.total_corridas} corridas cronometradas solo en <code>fit()</code>,
+      mismo dataset PlantVillage en grises 48x48 y la misma división 80/20 para los tres. Se lee el artefacto
+      ${esc(archivos.benchmark || 'artifacts/benchmark.csv')} sin reentrenar.</p>
+      <div class="subhead">Resumen por modelo (3 corridas · semillas 42, 43 y 44)</div>
+      <table><thead><tr><th>#</th><th>Modelo</th><th>Accuracy (media ± desv.)</th>
+        <th>Tiempo de entrenamiento</th><th>Corridas</th><th>Δ vs mejor</th></tr></thead>
+        <tbody>${filas}</tbody></table>
+      <div class="subhead">Detalle por corrida</div>
+      <table><thead><tr><th>Corrida</th><th>Modelo</th><th>Accuracy</th><th>Tiempo</th></tr></thead>
+        <tbody>${corridas}</tbody></table>
+    `;
+  },
+  13(d){
+    if (!d || !d.disponible){
+      return `<div class="subhead">Semana 13 · Motor de inferencia</div>
+        <p class="mono muted">No disponible: ${esc((d && (d.detalle || d.error)) || 'sin datos')}</p>`;
+    }
+    const reglas = (d.reglas || []).map(r => `<tr>
+        <td><strong>${esc(r.nombre)}</strong></td>
+        <td>${r.premisas.map(p => `<code>${esc(p)}</code>`).join(' ∧ ')}</td>
+        <td><code>${esc(r.conclusion)}</code></td></tr>`).join('');
+    const escenarios = (d.escenarios || []).map(e => {
+      const trazas = e.trazas.length
+        ? e.trazas.map((t,i) => `<tr><td>${i+1}</td><td>${esc(t)}</td></tr>`).join('')
+        : '<tr><td colspan="2" class="muted">ninguna regla se disparó</td></tr>';
+      return `
+        <div class="subhead">Escenario ${esc(e.nombre)} · ${esc(e.descripcion)}</div>
+        <p class="mono">Objetivo <strong>${esc(e.objetivo)}</strong>: ${tag(e.demostrada)}</p>
+        <p class="mono">${esc(e.resultado)}</p>
+        <p class="mono tiny muted">Hechos iniciales:</p>
+        <p>${e.hechos_iniciales.map(h => `<span class="chip">${esc(h)}</span>`).join('')}</p>
+        <p class="mono tiny muted">Hechos derivados:</p>
+        <p>${e.derivados.map(h => `<span class="chip">${esc(h)}</span>`).join('') || '<span class="muted">—</span>'}</p>
+        <table><thead><tr><th>#</th><th>Traza (regla ejecutada)</th></tr></thead><tbody>${trazas}</tbody></table>
+      `;
+    }).join('');
+    return `
+      <div class="subhead">Semana 13 · Motor de inferencia (encadenamiento hacia adelante)</div>
+      <p class="mono tiny muted">${d.modo === 'diagnostico'
+        ? 'Hechos construidos con las salidas reales de tu imagen: categoría (semana 03), confianza (semana 02), plan A* (semana 04) y regiones visibles (semana 10).'
+        : 'Escenarios de demostración del módulo (caso A: septoria con plan; caso B: virus con meta inalcanzable).'}</p>
+      ${escenarios}
       <div class="divider"></div>
-      <div class="subhead">Código fuente (src/semana10_texturas.py)</div>
-      ${codigoHtml}
-      <div class="subhead">Reporte (reports/semana10.md)</div>
-      ${reporteHtml}
+      <div class="subhead">Base de reglas (${(d.reglas || []).length})</div>
+      <table><thead><tr><th>Regla</th><th>Premisas</th><th>Conclusión</th></tr></thead>
+        <tbody>${reglas}</tbody></table>
     `;
   },
 };
@@ -1007,6 +1076,74 @@ function mostrarSemana10(){
   setStatus('Semana 10 — reconocimiento de imágenes (texturas).', 'ok');
 }
 
+/* ------------- Semanas 11 y 13: carga de artefactos y reportes ------------- */
+async function cargarSemana11(){
+  if (state.semana11 || state.semana11Loading) return {};
+  state.semana11Loading = true;
+  try {
+    const res = await fetch('/api/semana11');
+    state.semana11 = await res.json();
+  } catch(err){
+    state.semana11 = { disponible: false, detalle: String(err.message || err) };
+  } finally {
+    state.semana11Loading = false;
+    if (state.activeWeek === 11) renderPane();
+  }
+  return state.semana11;
+}
+
+async function cargarSemana13(){
+  if (state.semana13 || state.semana13Loading) return {};
+  state.semana13Loading = true;
+  try {
+    const res = await fetch('/api/semana13');
+    state.semana13 = await res.json();
+  } catch(err){
+    state.semana13 = { disponible: false, detalle: String(err.message || err) };
+  } finally {
+    state.semana13Loading = false;
+    if (state.activeWeek === 13) renderPane();
+  }
+  return state.semana13;
+}
+
+function cargandoSemana(titulo){
+  return `<div class="subhead">${esc(titulo)}</div>
+    <p class="mono muted">Cargando artefactos de la semana…</p>`;
+}
+
+function mostrarBenchmark(){
+  document.getElementById('semanas').scrollIntoView({behavior:'smooth'});
+  const weeks = { 11: { sub: 'Semana 11', label: 'Benchmark',
+                        render: () => state.semana11
+                          ? renderers[11](state.semana11)
+                          : cargandoSemana('Semana 11 · Benchmark de modelos') } };
+  state.mode = 'semana11';
+  setWeeks(weeks, 11, 'Semana 11 · Benchmark de modelos');
+  cargarSemana11().then(d => {
+    if (state.activeWeek === 11) renderPane();
+    setStatus(d && d.disponible
+      ? `Benchmark: mejor modelo ${d.mejor_modelo}.`
+      : 'Benchmark no disponible: ejecuta python -m src.semana11_benchmark.', d && d.disponible ? 'ok' : 'error');
+  });
+}
+
+function mostrarConocimiento(){
+  document.getElementById('semanas').scrollIntoView({behavior:'smooth'});
+  const weeks = { 13: { sub: 'Semana 13', label: 'Motor de reglas',
+                        render: () => state.semana13
+                          ? renderers[13](state.semana13)
+                          : cargandoSemana('Semana 13 · Motor de inferencia') } };
+  state.mode = 'semana13';
+  setWeeks(weeks, 13, 'Semana 13 · Motor de inferencia');
+  cargarSemana13().then(d => {
+    if (state.activeWeek === 13) renderPane();
+    setStatus(d && d.disponible
+      ? 'Semana 13 — motor de inferencia (casos de demostración).'
+      : 'Semana 13 no disponible.', d && d.disponible ? 'ok' : 'error');
+  });
+}
+
 $('btnDiagnose').addEventListener('click', async () => {
   if (!state.file){ setStatus('Selecciona una imagen antes de diagnosticar.', 'error'); return; }
   const fd = new FormData();
@@ -1031,6 +1168,15 @@ $('btnDiagnose').addEventListener('click', async () => {
     });
     weeks[10] = { sub: 'Semana 10', label: 'Texturas',
                   render: () => renderers[10](s["10"]) };
+    if (!state.semana11 && s["11"]) state.semana11 = s["11"];
+    weeks[11] = { sub: 'Semana 11', label: 'Benchmark',
+                  render: () => state.semana11
+                    ? renderers[11](state.semana11)
+                    : cargandoSemana('Semana 11 · Benchmark de modelos') };
+    weeks[13] = { sub: 'Semana 13', label: 'Motor de reglas',
+                  render: () => s["13"]
+                    ? renderers[13](s["13"])
+                    : cargandoSemana('Semana 13 · Motor de inferencia') };
     state.mode = 'imagen';
     setWeeks(weeks, 2, `Imagen · ${data.clase} — ${pct(data.confianza)}`);
     setStatus(`Diagnóstico completo: ${data.clase} — ${pct(data.confianza)}`, 'ok');
@@ -1055,6 +1201,7 @@ async function consultar(){
     const data = await res.json();
     if (!res.ok || data.error){ throw new Error(data.error || 'Error del servidor'); }
 
+    if (!state.semana13 && !state.semana13Loading) cargarSemana13();
     const weeks = {
       5: {
         sub: 'Semana 05', label: 'Sistema híbrido',
@@ -1064,6 +1211,18 @@ async function consultar(){
       10: {
         sub: 'Semana 10', label: 'Texturas',
         render: () => renderers[10](),
+      },
+      11: {
+        sub: 'Semana 11', label: 'Benchmark',
+        render: () => state.semana11
+          ? renderers[11](state.semana11)
+          : cargandoSemana('Semana 11 · Benchmark de modelos'),
+      },
+      13: {
+        sub: 'Semana 13', label: 'Motor de reglas',
+        render: () => state.semana13
+          ? renderers[13](state.semana13)
+          : cargandoSemana('Semana 13 · Motor de inferencia'),
       }
     };
     state.mode = 'texto';
@@ -1083,6 +1242,8 @@ $('navConsult').addEventListener('click', () => {
   $('symptoms').focus();
 });
 $('footSemana10').addEventListener('click', (e) => { e.preventDefault(); mostrarSemana10(); });
+$('footSemana11').addEventListener('click', (e) => { e.preventDefault(); mostrarBenchmark(); });
+$('footSemana13').addEventListener('click', (e) => { e.preventDefault(); mostrarConocimiento(); });
 $('symptoms').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) consultar();
 });
@@ -1105,10 +1266,12 @@ $('btnClear').addEventListener('click', () => {
 /* ------------------------------ estado ------------------------------ */
 fetch('/api/health').then(r => r.json()).then(h => {
   const red = h.modelo_semana08 ? 'S8 lista' : 'S8 no disponible';
-  setStatus(`Backend activo · modelo S2 ${h.modelo_semana02 ? 'cargado' : 'no disponible'} · ${red}`, h.pipeline ? 'ok' : 'error');
+  const s11 = h.benchmark ? 'S11 lista' : 'S11 no disponible';
+  setStatus(`Backend activo · modelo S2 ${h.modelo_semana02 ? 'cargado' : 'no disponible'} · ${red} · ${s11}`, h.pipeline ? 'ok' : 'error');
 }).catch(() => setStatus('No se pudo contactar el backend.', 'error'));
 
 cargarSemana10();
+cargarSemana11();
 </script>
 </body>
 </html>

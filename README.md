@@ -107,10 +107,38 @@ Los datos se encuentran separados en los archivos CSV dentro de `data/processed/
 - **Metodo:** `imagen -> escala de grises -> umbral de Otsu -> measure.label -> regiones (area > 50 px) -> histograma de intensidad (32 bins, density=True) -> textura LBP (radius=2, points=16, method="uniform") -> vector de 53 valores` con `scikit-image`.
 - **Vector:** `3` (area media, desviacion estandar del area y cantidad de regiones) `+ 32` (histograma de intensidad) `+ 18` (histograma LBP) `= 53`.
 - **Comparacion:** dos imagenes del dominio: `data/imagen_proyecto.png` (tomate con septoria) y `data/imagen_proyecto_2.png` (tomate sana, PlantVillage). La hoja enferma se fragmenta en 5 regiones de tamanos dispares; la sana forma una sola region homogenea.
-- **Interfaz web:** al pulsar **Diagnosticar**, la pestana Semana 10 compara la imagen subida por el usuario contra la hoja sana de referencia (`data/imagen_proyecto_2.png`) y genera `artifacts/web_semana10_comparacion.png` con la figura de esa comparacion. La pestana tambien muestra el codigo fuente, el resumen del vector y el reporte `reports/semana10.md` renderizado.
+- **Interfaz web:** al pulsar **Diagnosticar**, la pestana Semana 10 compara la imagen subida por el usuario contra la hoja sana de referencia (`data/imagen_proyecto_2.png`) y genera `artifacts/web_semana10_comparacion.png` con la figura de esa comparacion. La pestana tambien muestra el resumen del vector de 53 valores y la tabla comparativa de las imagenes.
+- **Interfaz web (semanas 11 y 13):** al pulsar **Diagnosticar**, Resultados incorpora las pestanas Semana 11 y Semana 13 junto a las demas. La Semana 11 lee y presenta `artifacts/benchmark.csv` (no reentrena) y la Semana 13 razona con los hechos reales del diagnostico (categoria, confianza, plan A* y regiones visibles). Enlaces equivalentes en el pie de pagina (`#footSemana11`, `#footSemana13`) y endpoints `/api/semana11` (benchmark) y `/api/semana13` (casos de demostracion).
 - **Artefactos:** `artifacts/semana10_features.npy` (vector e histogramas por imagen) y `artifacts/semana10_histograma.png` (figura comparativa).
 - **Reporte:** `reports/semana10.md`.
 - **Ejecucion:** `python -m src.semana10_texturas`
+
+### Semana 11 - Benchmark de modelos
+
+- **Area:** Evaluacion y seleccion de modelos de aprendizaje automatico.
+- **Problema:** el proyecto usaba una MLP en la semana 08 y LogisticRegression en la semana 02, pero no existia una comparacion formal de accuracy y tiempo de entrenamiento sobre el mismo conjunto de datos que respaldara la eleccion del clasificador.
+- **Metodo:** benchmark con 3 modelos sobre el mismo dataset y la misma division estratificada 80/20: `LogisticRegression` (`max_iter=500`), `RandomForestClassifier` (`n_estimators=150`, `n_jobs=-1`) y `MLPClassifier` (capas 128 y 64, `max_iter=100`). Se usan hasta 250 imagenes por clase de `data/raw/PlantVillage-Dataset/raw/color/` (9,402 imagenes, 38 clases), en grises 48x48 (2,304 caracteristicas), con 3 corridas y semillas 42, 43 y 44. El cronometro mide solo `fit()` y el accuracy se evalua sobre el mismo conjunto de prueba (7,521 entrenamiento / 1,881 prueba).
+- **Resultados:** promedios de las 3 corridas:
+  - `random_forest`: **0.4733 ± 0.0035** de accuracy y **7.5 s ± 0.1** de entrenamiento.
+  - `mlp_classifier`: 0.3773 ± 0.0037 de accuracy y 50.6 s ± 10.9 de entrenamiento.
+  - `logistic_regression`: 0.3073 ± 0.0000 de accuracy y 18.7 s ± 1.7 de entrenamiento.
+- **Decision:** se selecciona **RandomForestClassifier** por obtener el mayor accuracy y el menor tiempo de entrenamiento; la integracion al pipeline queda propuesta y la MLP se conserva como referencia de accuracy maximo.
+- **Relacion con las semanas previas:** compara la MLP de la semana 08 con la LogisticRegression usada en la semana 02 y propone a RandomForest como clasificador del pipeline; la decision aun no esta integrada en `main.py` ni en `server.py`.
+- **Artefactos:** `artifacts/benchmark.csv` (detalle de las 9 corridas: 3 modelos x 3 semillas).
+- **Reporte:** `reports/semana11_adr.md`.
+- **Ejecucion:** `python -m src.semana11_benchmark`
+
+### Semana 13 - Ingenieria del conocimiento: motor de inferencia
+
+- **Area:** Ingenieria del conocimiento (sistemas logicos y motor de inferencia).
+- **Problema:** PlantAI ya diagnostica la hoja, pero no decide que hacer con ese diagnostico. Faltaba una politica explicable para elegir entre manejo inmediato, cuarentena/contencion, revision experta o monitoreo preventivo.
+- **Metodo:** motor de reglas proposicionales (tipo Horn) con encadenamiento hacia adelante. Los hechos salen de las semanas 02 (clase y confianza), 03 (categoria taxonomica), 09/10 (dano foliar visible) y 04 (plan disponible o meta inalcanzable). La cadena del caso A es R1 -> R4 -> R5: `enfermedad_foliar_confirmada`, luego `tratamiento_planificado` y finalmente `manejo_inmediato`.
+- **Escenarios:** A) tomate con septoria, confianza alta, dano foliar visible y plan A* de 3 acciones; B) caso viral con meta inalcanzable, donde se disparan R6-R8 pero falta `plan_disponible` para R4/R5.
+- **Resultado:** en A se demuestra `manejo_inmediato`; en B queda **NO DEMOSTRADA con los hechos disponibles** y se deriva `manejo_integrado`. No demostrado no significa falso.
+- **Contenido del modulo:** motor, reglas, escenarios, 9 pruebas `unittest`, presentacion por consola y generacion del reporte, todo en `src/semana13_conocimiento.py`.
+- **Reporte:** `reports/reporte_semana13.md` (se genera con `python src/semana13_conocimiento.py --reporte`).
+- **Ejecucion:** `python -m src.semana13_conocimiento`
+- **Pruebas:** `python -m unittest src.semana13_conocimiento -v`
 
 ## Estructura del proyecto
 
@@ -134,12 +162,14 @@ plantas_enfermas/
 │   ├── semana08_red_ontologia.py    # Red neuronal MLP + evidencia SQLite + ontologia
 │   ├── semana09_vision.py          # Caracteristicas + Canny + Otsu + regiones
 │   ├── semana10_texturas.py        # Otsu + medidas de region + histograma + LBP
+│   ├── semana11_benchmark.py       # Benchmark LogisticRegression / RandomForest / MLP
+│   ├── semana13_conocimiento.py    # Semana 13: reglas + encadenamiento + pruebas + reporte
 │   └── pipeline.py                 # Pipeline integrada image→prediccion→plan
-├── reports/                        # Reportes por semana (semana10.md)
+├── reports/                        # Reportes por semana (semana10.md, semana11_adr.md, reporte_semana13.md)
 ├── main.py                         # Punto de entrada (CLI)
 ├── server.py                       # Backend web (Flask) que sirve index.html
 ├── index.html                      # Interfaz web (diagnostico + barra de semanas)
-├── artifacts/                      # Artefactos semana 08/09/10 (modelo, BD, ontologia, paneles)
+├── artifacts/                      # Artefactos semana 08/09/10/11 (modelo, BD, ontologia, paneles, benchmark)
 ├── requirements.txt
 └── README.md
 ```
@@ -185,11 +215,15 @@ escritorio: seleccionar una imagen, escribir sintomas y los botones
 **Diagnosticar** (imagen) y **Consultar sintomas** (texto). Los resultados se
 muestran en una barra lateral por semanas:
 
-- **Caso A (imagen):** ejecuta las semanas 02, 03, 04, 07, 08, 09 y 10 para esa
+- **Caso A (imagen):** ejecuta las semanas 02, 03, 04, 07, 08, 09, 10, 11 y 13 para esa
   planta. La semana 02 es la vista por defecto y la semana 10 compara la imagen
-  enviada contra la hoja sana de referencia. La semana 05 no aparece.
+  enviada contra la hoja sana de referencia. La semana 11 solo lee
+  `artifacts/benchmark.csv` (no reentrena); la semana 13 razona sobre los hechos
+  reales del diagnostico (categoria, confianza, plan A* y regiones). La semana 05
+  no aparece.
 - **Caso B (sintomas):** ejecuta la semana 05 (sistema hibrido) y la marca como
-  la que se esta ejecutando; la semana 10 muestra la comparacion de ejemplo.
+  la que se esta ejecutando; la semana 10 muestra la comparacion de ejemplo, la
+  11 presenta el benchmark y la 13 los dos casos de demostracion del modulo.
 
 Si se envia imagen y texto a la vez, cada boton mantiene su comportamiento
 independiente: "Diagnosticar" usa la imagen e ignora el texto; "Consultar
@@ -228,8 +262,12 @@ python -m src.semana07_representaciones
 python -m src.semana08_red_ontologia
 python -m src.semana09_vision
 python -m src.semana10_texturas
+python -m src.semana11_benchmark
+python -m src.semana13_conocimiento
 ```
 
 > **Nota:** Los modulos individuales deben ejecutarse con `python -m src.<nombre>` desde la raiz del proyecto. No usar `python src/<nombre>.py` porque los imports no funcionarian.
+
+> **Nota:** La Semana 13 tambien se puede ejecutar directamente con `python src/semana13_conocimiento.py`, probar con `python -m unittest src.semana13_conocimiento -v` y regenerar su reporte con `python src/semana13_conocimiento.py --reporte`.
 
 > **Nota:** La primera ejecucion de la semana 02 puede tardar varios minutos al cargar y redimensionar las imagenes del dataset.
