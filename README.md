@@ -108,7 +108,7 @@ Los datos se encuentran separados en los archivos CSV dentro de `data/processed/
 - **Vector:** `3` (area media, desviacion estandar del area y cantidad de regiones) `+ 32` (histograma de intensidad) `+ 18` (histograma LBP) `= 53`.
 - **Comparacion:** dos imagenes del dominio: `data/imagen_proyecto.png` (tomate con septoria) y `data/imagen_proyecto_2.png` (tomate sana, PlantVillage). La hoja enferma se fragmenta en 5 regiones de tamanos dispares; la sana forma una sola region homogenea.
 - **Interfaz web:** al pulsar **Diagnosticar**, la pestana Semana 10 compara la imagen subida por el usuario contra la hoja sana de referencia (`data/imagen_proyecto_2.png`) y genera `artifacts/web_semana10_comparacion.png` con la figura de esa comparacion. La pestana tambien muestra el resumen del vector de 53 valores y la tabla comparativa de las imagenes.
-- **Interfaz web (semanas 11 y 13):** al pulsar **Diagnosticar**, Resultados incorpora las pestanas Semana 11 y Semana 13 junto a las demas. La Semana 11 lee y presenta `artifacts/benchmark.csv` (no reentrena) y la Semana 13 razona con los hechos reales del diagnostico (categoria, confianza, plan A* y regiones visibles). Enlaces equivalentes en el pie de pagina (`#footSemana11`, `#footSemana13`) y endpoints `/api/semana11` (benchmark) y `/api/semana13` (casos de demostracion).
+- **Interfaz web (semanas 11, 13 y 14):** al pulsar **Diagnosticar**, Resultados incorpora las pestanas Semana 11, Semana 13 y Semana 14 junto a las demas. La Semana 11 lee y presenta `artifacts/benchmark.csv` (no reentrena), la Semana 13 razona con los hechos reales del diagnostico (categoria, confianza, plan A* y regiones visibles) y la Semana 14 consulta la red semantica con la clase detectada. Enlaces equivalentes en el pie de pagina (`#footSemana11`, `#footSemana13`, `#footSemana14`) y endpoints `/api/semana11` (benchmark), `/api/semana13` (motor de reglas) y `/api/semana14` (red semantica).
 - **Artefactos:** `artifacts/semana10_features.npy` (vector e histogramas por imagen) y `artifacts/semana10_histograma.png` (figura comparativa).
 - **Reporte:** `reports/semana10.md`.
 - **Ejecucion:** `python -m src.semana10_texturas`
@@ -140,6 +140,18 @@ Los datos se encuentran separados en los archivos CSV dentro de `data/processed/
 - **Ejecucion:** `python -m src.semana13_conocimiento`
 - **Pruebas:** `python -m unittest src.semana13_conocimiento -v`
 
+### Semana 14 - Ingenieria del conocimiento: redes semanticas
+
+- **Area:** Representaciones del conocimiento y linguistica (redes semanticas).
+- **Problema:** la taxonomia de la semana 03 vive en diccionarios de codigo y no puede consultarse ni explicarse por si misma. Se necesita una representacion donde cada concepto, su jerarquia y sus propiedades queden explicitos y justificados.
+- **Metodo:** red semantica (nodos = conceptos, aristas dirigidas y etiquetadas = relaciones). Un analizador linguistico restringido convierte oraciones en espanol en triples `(sujeto, relacion, objeto)`: solo acepta dos patrones (`X es Y`, `X necesita Y`) y rechaza cualquier otra oracion con `ValueError` en lugar de inventar un triple. `normalizar()` unifica mayusculas y tildes.
+- **Inferencia:** regla de transitividad de `es_un` (recorrido del grafo con control de ciclos) y regla didactica de herencia de `necesita` (un concepto hereda la propiedad de sus categorias superiores).
+- **Escenario:** taxonomia PlantAI completa, donde `septoria es_un estado_fitosanitario` se demuestra con la ruta `septoria -> enfermedad_fungica -> problema_foliar -> estado_fitosanitario` y las necesidades (`tratamiento`, `inspeccion`) se heredan de `problema_foliar`. La consulta negativa (`septoria es_un hoja_sana -> False`) muestra que no hay evidencia en la red: False no es falsedad universal.
+- **Integracion:** al diagnosticar una imagen, `server.py` agrega el triple `(clase detectada, es_un, categoria)` de las semanas 02/03 y consulta la red real de esa planta.
+- **Contenido del modulo:** normalizacion, parser, red semantica, escenarios, presentacion por consola y generacion del reporte, todo en `src/semana14_redes_semanticas.py`.
+- **Reporte:** `reports/reporte_semana14.md` (se genera con `python src/semana14_redes_semanticas.py --reporte`).
+- **Ejecucion:** `python -m src.semana14_redes_semanticas`
+
 ## Estructura del proyecto
 
 ```
@@ -164,8 +176,9 @@ plantas_enfermas/
 │   ├── semana10_texturas.py        # Otsu + medidas de region + histograma + LBP
 │   ├── semana11_benchmark.py       # Benchmark LogisticRegression / RandomForest / MLP
 │   ├── semana13_conocimiento.py    # Semana 13: reglas + encadenamiento + pruebas + reporte
+│   ├── semana14_redes_semanticas.py # Semana 14: red semantica + parser + inferencia
 │   └── pipeline.py                 # Pipeline integrada image→prediccion→plan
-├── reports/                        # Reportes por semana (semana10.md, semana11_adr.md, reporte_semana13.md)
+├── reports/                        # Reportes por semana (semana10.md, semana11_adr.md, reporte_semana13.md, reporte_semana14.md)
 ├── main.py                         # Punto de entrada (CLI)
 ├── server.py                       # Backend web (Flask) que sirve index.html
 ├── index.html                      # Interfaz web (diagnostico + barra de semanas)
@@ -215,15 +228,16 @@ escritorio: seleccionar una imagen, escribir sintomas y los botones
 **Diagnosticar** (imagen) y **Consultar sintomas** (texto). Los resultados se
 muestran en una barra lateral por semanas:
 
-- **Caso A (imagen):** ejecuta las semanas 02, 03, 04, 07, 08, 09, 10, 11 y 13 para esa
+- **Caso A (imagen):** ejecuta las semanas 02, 03, 04, 07, 08, 09, 10, 11, 13 y 14 para esa
   planta. La semana 02 es la vista por defecto y la semana 10 compara la imagen
   enviada contra la hoja sana de referencia. La semana 11 solo lee
   `artifacts/benchmark.csv` (no reentrena); la semana 13 razona sobre los hechos
-  reales del diagnostico (categoria, confianza, plan A* y regiones). La semana 05
-  no aparece.
+  reales del diagnostico (categoria, confianza, plan A* y regiones) y la semana 14
+  consulta la red semantica con la clase detectada. La semana 05 no aparece.
 - **Caso B (sintomas):** ejecuta la semana 05 (sistema hibrido) y la marca como
   la que se esta ejecutando; la semana 10 muestra la comparacion de ejemplo, la
-  11 presenta el benchmark y la 13 los dos casos de demostracion del modulo.
+  11 presenta el benchmark, la 13 los dos casos del motor de reglas y la 14 la
+  red semantica de la taxonomia del proyecto.
 
 Si se envia imagen y texto a la vez, cada boton mantiene su comportamiento
 independiente: "Diagnosticar" usa la imagen e ignora el texto; "Consultar
@@ -264,10 +278,13 @@ python -m src.semana09_vision
 python -m src.semana10_texturas
 python -m src.semana11_benchmark
 python -m src.semana13_conocimiento
+python -m src.semana14_redes_semanticas
 ```
 
 > **Nota:** Los modulos individuales deben ejecutarse con `python -m src.<nombre>` desde la raiz del proyecto. No usar `python src/<nombre>.py` porque los imports no funcionarian.
 
 > **Nota:** La Semana 13 tambien se puede ejecutar directamente con `python src/semana13_conocimiento.py`, probar con `python -m unittest src.semana13_conocimiento -v` y regenerar su reporte con `python src/semana13_conocimiento.py --reporte`.
+
+> **Nota:** La Semana 14 tambien se puede ejecutar directamente con `python src/semana14_redes_semanticas.py` y regenerar su reporte con `python src/semana14_redes_semanticas.py --reporte`.
 
 > **Nota:** La primera ejecucion de la semana 02 puede tardar varios minutos al cargar y redimensionar las imagenes del dataset.

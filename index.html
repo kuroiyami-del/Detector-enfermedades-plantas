@@ -335,7 +335,7 @@ footer{border-top:2px solid var(--color-ink-black);margin-top:var(--section-gap)
 <!-- ============ ANNOUNCEMENT ============ -->
 <div class="banner">
   <svg viewBox="0 0 24 24" fill="none" stroke="#222" stroke-width="1.6"><path d="M12 22V12M12 12C12 7 8 4 3 4c0 5 4 8 9 8zM12 12c0-5 4-8 9-8-5 0-9 3-9 8z"/></svg>
-  Diagnóstico botánico con inteligencia artificial · diez semanas de conocimiento en una sola página
+  Diagnóstico botánico con inteligencia artificial · once semanas de conocimiento en una sola página
   <svg viewBox="0 0 24 24" fill="none" stroke="#222" stroke-width="1.6"><path d="M12 22V12M12 12C12 7 8 4 3 4c0 5 4 8 9 8zM12 12c0-5 4-8 9-8-5 0-9 3-9 8z"/></svg>
 </div>
 
@@ -497,6 +497,7 @@ footer{border-top:2px solid var(--color-ink-black);margin-top:var(--section-gap)
         <a href="#semanas" id="footSemana10">Semana 10 · Texturas</a>
         <a href="#semanas" id="footSemana11">Semana 11 · Benchmark</a>
         <a href="#semanas" id="footSemana13">Semana 13 · Motor de reglas</a>
+        <a href="#semanas" id="footSemana14">Semana 14 · Red semántica</a>
         <a href="#semanas">Semana 05 · Sistema híbrido</a>
       </div>
     </div>
@@ -524,6 +525,8 @@ const state = {
   semana11Loading: false,
   semana13: null,      // demo de /api/semana13
   semana13Loading: false,
+  semana14: null,      // demo de /api/semana14
+  semana14Loading: false,
 };
 
 /* ----------------------------- utilidades ----------------------------- */
@@ -1047,6 +1050,62 @@ const renderers = {
         <tbody>${reglas}</tbody></table>
     `;
   },
+  14(d){
+    if (!d || !d.disponible){
+      return `<div class="subhead">Semana 14 · Red semántica</div>
+        <p class="mono muted">No disponible: ${esc((d && (d.detalle || d.error)) || 'sin datos')}</p>`;
+    }
+    const filtros = (d.oraciones_rechazadas || []).map(o =>
+      `<p class="mono tiny muted">⚠ Oración fuera de los dos patrones del parser: <code>${esc(o)}</code> → <strong>ValueError</strong>.
+      El analizador no interpreta lenguaje natural general; rechazar es más seguro que inventar un triple.</p>`);
+    const escenarios = (d.escenarios || []).map(e => {
+      const hechos = (e.hechos || []).map(t =>
+        `<tr><td><code>${esc(t.sujeto)}</code></td><td class="muted">—${esc(t.relacion)}→</td><td><code>${esc(t.objeto)}</code></td></tr>`).join('');
+      const consultas = (e.consultas || []).map(c => {
+        if (c.tipo === 'necesidades'){
+          let heredado = '';
+          const por = c.valor_por_ancestro || {};
+          const filtroAncestros = Object.keys(por).map(a =>
+            `<span class="chip">${esc(a)}: ${por[a].join(', ')}</span>`).join(' ');
+          heredado = filtroAncestros || '';
+          return `<tr>
+            <td>${esc(c.pregunta)}</td>
+            <td class="mono">${(c.respuesta || []).map(v => `<span class="chip">${esc(v)}</span>`).join(' ') || '<span class="muted">—</span>'}</td>
+            <td>${heredado ? 'heredada ' + heredado : (c.inferido ? 'inferida' : 'propia del nodo')}</td></tr>`;
+        }
+        const ruta = c.ruta && c.ruta.length ? c.ruta.join(' → ') : '';
+        const rutaCell = ruta
+          ? `<p class="mono tiny">${esc(ruta)}</p><p class="mono tiny muted">${esc(c.resultado)}</p>`
+          : `<p class="mono tiny muted">${esc(c.resultado)}</p>`;
+        return `<tr>
+          <td>${esc(c.pregunta)}</td>
+          <td>${tag(c.respuesta)}</td>
+          <td>${rutaCell}</td></tr>`;
+      }).join('');
+      return `
+        <div class="subhead">Escenario ${esc(e.nombre)} · ${esc(e.descripcion)}</div>
+        <table><thead><tr><th>Consulta</th><th>Respuesta</th><th>Evidencia</th></tr>
+          <tbody>${consultas}</tbody></table>
+      `;
+    }).join('');
+    const hechosBase = ((d.escenarios && d.escenarios[0] && d.escenarios[0].hechos) || [])
+      .filter(t => t.relacion === 'es_un').length;
+    return `
+      <div class="subhead">Semana 14 · Red semántica (nodos + aristas + inferencia)</div>
+      <p class="mono tiny muted">${d.modo === 'diagnostico'
+        ? (`Red de la taxonomía del proyecto (semana 03) consultada con la clase detectada: <code>${esc(d.nodo_consultado || '')}</code>.`
+          + ' Las consultas recorren aristas <strong>es_un</strong>; las necesidades se <strong>heredan</strong> de las categorías superiores.')
+        : ('Red de la taxonomía PlantAI: ' + hechosBase + ' aristas es_un. El objetivo ('
+          + esc(d.objetivo || '') + ') NO está almacenado como arista directa: se demuestra recorriendo el grafo.')}</p>
+      ${filtros}
+      ${escenarios}
+      <div class="divider"></div>
+      <div class="subhead">Hechos registrados (triples de la red base)</div>
+      <table><thead><tr><th>Sujeto</th><th>Relación</th><th>Objeto</th></tr></thead>
+        <tbody>${((d.escenarios && d.escenarios[0] && d.escenarios[0].hechos) || []).map(t =>
+          `<tr><td><code>${esc(t.sujeto)}</code></td><td class="muted">—${esc(t.relacion)}→</td><td><code>${esc(t.objeto)}</code></td></tr>`).join('')}</tbody></table>
+    `;
+  },
 };
 
 /* ============================== ACCIONES ============================== */
@@ -1107,6 +1166,21 @@ async function cargarSemana13(){
   return state.semana13;
 }
 
+async function cargarSemana14(){
+  if (state.semana14 || state.semana14Loading) return {};
+  state.semana14Loading = true;
+  try {
+    const res = await fetch('/api/semana14');
+    state.semana14 = await res.json();
+  } catch(err){
+    state.semana14 = { disponible: false, detalle: String(err.message || err) };
+  } finally {
+    state.semana14Loading = false;
+    if (state.activeWeek === 14) renderPane();
+  }
+  return state.semana14;
+}
+
 function cargandoSemana(titulo){
   return `<div class="subhead">${esc(titulo)}</div>
     <p class="mono muted">Cargando artefactos de la semana…</p>`;
@@ -1144,6 +1218,22 @@ function mostrarConocimiento(){
   });
 }
 
+function mostrarRedSemantica(){
+  document.getElementById('semanas').scrollIntoView({behavior:'smooth'});
+  const weeks = { 14: { sub: 'Semana 14', label: 'Red semántica',
+                        render: () => state.semana14
+                          ? renderers[14](state.semana14)
+                          : cargandoSemana('Semana 14 · Red semántica') } };
+  state.mode = 'semana14';
+  setWeeks(weeks, 14, 'Semana 14 · Red semántica');
+  cargarSemana14().then(d => {
+    if (state.activeWeek === 14) renderPane();
+    setStatus(d && d.disponible
+      ? `Semana 14 — red semántica (objetivo: ${d.objetivo}).`
+      : 'Semana 14 no disponible.', d && d.disponible ? 'ok' : 'error');
+  });
+}
+
 $('btnDiagnose').addEventListener('click', async () => {
   if (!state.file){ setStatus('Selecciona una imagen antes de diagnosticar.', 'error'); return; }
   const fd = new FormData();
@@ -1177,6 +1267,10 @@ $('btnDiagnose').addEventListener('click', async () => {
                   render: () => s["13"]
                     ? renderers[13](s["13"])
                     : cargandoSemana('Semana 13 · Motor de inferencia') };
+    weeks[14] = { sub: 'Semana 14', label: 'Red semántica',
+                  render: () => s["14"]
+                    ? renderers[14](s["14"])
+                    : cargandoSemana('Semana 14 · Red semántica') };
     state.mode = 'imagen';
     setWeeks(weeks, 2, `Imagen · ${data.clase} — ${pct(data.confianza)}`);
     setStatus(`Diagnóstico completo: ${data.clase} — ${pct(data.confianza)}`, 'ok');
@@ -1202,6 +1296,7 @@ async function consultar(){
     if (!res.ok || data.error){ throw new Error(data.error || 'Error del servidor'); }
 
     if (!state.semana13 && !state.semana13Loading) cargarSemana13();
+    if (!state.semana14 && !state.semana14Loading) cargarSemana14();
     const weeks = {
       5: {
         sub: 'Semana 05', label: 'Sistema híbrido',
@@ -1223,6 +1318,12 @@ async function consultar(){
         render: () => state.semana13
           ? renderers[13](state.semana13)
           : cargandoSemana('Semana 13 · Motor de inferencia'),
+      },
+      14: {
+        sub: 'Semana 14', label: 'Red semántica',
+        render: () => state.semana14
+          ? renderers[14](state.semana14)
+          : cargandoSemana('Semana 14 · Red semántica'),
       }
     };
     state.mode = 'texto';
@@ -1244,6 +1345,7 @@ $('navConsult').addEventListener('click', () => {
 $('footSemana10').addEventListener('click', (e) => { e.preventDefault(); mostrarSemana10(); });
 $('footSemana11').addEventListener('click', (e) => { e.preventDefault(); mostrarBenchmark(); });
 $('footSemana13').addEventListener('click', (e) => { e.preventDefault(); mostrarConocimiento(); });
+$('footSemana14').addEventListener('click', (e) => { e.preventDefault(); mostrarRedSemantica(); });
 $('symptoms').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) consultar();
 });

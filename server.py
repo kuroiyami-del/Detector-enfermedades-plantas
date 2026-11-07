@@ -7,6 +7,7 @@ ya existentes de los modulos src/semanaXX.py SIN modificarlos.
 
 Caso A (imagen):  semana02 + semana03 + semana04 + semana07 + semana08 + semana09
                   + semana10 + semana11 (benchmark) + semana13 (motor de reglas)
+                  + semana14 (red semantica)
 Caso B (texto):   semana05 (sistema hibrido) via answer()
 
 Ejecutar:  python server.py
@@ -69,6 +70,7 @@ def pipeline():
             import src.semana09_vision as semana09_vision
             import src.semana10_texturas as semana10_texturas
             import src.semana13_conocimiento as semana13_conocimiento
+            import src.semana14_redes_semanticas as semana14_redes
 
             _PIPELINE = {
                 "load_model": load_model,
@@ -84,6 +86,7 @@ def pipeline():
                 "semana09_vision": semana09_vision,
                 "semana10_texturas": semana10_texturas,
                 "semana13_conocimiento": semana13_conocimiento,
+                "semana14_redes": semana14_redes,
             }
         except Exception as exc:  # pragma: no cover
             _PIPELINE_ERROR = str(exc)
@@ -192,6 +195,7 @@ def health():
         "texturas": _semana10_disponible(),
         "benchmark": _semana11_disponible(),
         "conocimiento": "semana13_conocimiento" in (pipeline() or {}),
+        "red_semantica": "semana14_redes" in (pipeline() or {}),
     })
 
 
@@ -612,6 +616,103 @@ def semana13_demo():
         s13, "demo", reglas, [caso_a, caso_b]))
 
 
+# Semana 14: red semantica de la taxonomia del proyecto
+
+def _nodo_categoria_semana14(categoria):
+    """Mapea la categoria de la semana 03 al nodo de la red semantica."""
+    cat = _normalizar_categoria(categoria)
+    if "fungic" in cat:
+        return "enfermedad_fungica"
+    if "bacterian" in cat:
+        return "enfermedad_bacteriana"
+    if "viral" in cat:
+        return "enfermedad_viral"
+    if "plaga" in cat:
+        return "plaga"
+    if "sana" in cat:
+        return "hoja_sana"
+    return None
+
+
+def _semana14_payload(s14, modo, escenarios, oraciones_rechazadas=None):
+    """Empaqueta los escenarios, el codigo y el reporte del modulo."""
+    from src.config import ROOT
+
+    return {
+        "disponible": True,
+        "modo": modo,
+        "objetivo": f"{s14.ORIGEN_OBJETIVO} es_un {s14.DESTINO_OBJETIVO}",
+        "oraciones_rechazadas": oraciones_rechazadas or [],
+        "escenarios": list(escenarios),
+        "codigo": _leer_texto(
+            ROOT / "src" / "semana14_redes_semanticas.py"),
+        "reporte": _leer_texto(
+            ROOT / "reports" / "reporte_semana14.md"),
+        "archivos": {
+            "codigo": "src/semana14_redes_semanticas.py",
+            "reporte": "reports/reporte_semana14.md",
+        },
+    }
+
+
+def _semana14_desde_diagnostico(clase, categoria):
+    """Consulta la red con la clase real detectada (semanas 02/03)."""
+    p = pipeline()
+    s14 = (p or {}).get("semana14_redes")
+    if s14 is None:
+        return {
+            "disponible": False,
+            "detalle": "modulo de la semana 14 no disponible",
+        }
+
+    oraciones = list(s14.ORACIONES_BASE)
+    nodo_clase = None
+    nodo_categoria = _nodo_categoria_semana14(categoria)
+
+    # Tomato___Septoria_leaf_spot es una sola palabra (\w+ admite "_").
+    if nodo_categoria:
+        clase_nodo = s14.normalizar(clase).replace("tomato", "tomate")
+        oraciones.append(f"Una {clase_nodo} es una {nodo_categoria}.")
+        _red, rechazadas = s14.crear_red(oraciones)
+        if not rechazadas:
+            nodo_clase = clase_nodo
+
+    consultas = [
+        {"tipo": "es_un", "origen": nodo_clase,
+         "destino": s14.DESTINO_OBJETIVO},
+        {"tipo": "es_un", "origen": nodo_clase, "destino": "problema_foliar"},
+        {"tipo": "necesidades", "origen": nodo_clase},
+    ] if nodo_clase else list(s14.CONSULTAS_CASO_A)
+
+    escenario = s14.ejecutar_escenario(
+        "Imagen",
+        "red semantica consultada con la clase detectada en tu imagen",
+        oraciones,
+        consultas,
+    )
+    payload = _semana14_payload(s14, "diagnostico", [escenario])
+    payload["nodo_consultado"] = nodo_clase
+    return payload
+
+
+@app.route("/api/semana14")
+def semana14_demo():
+    """Muestra la red semantica con los dos escenarios de demostracion."""
+    p = pipeline()
+    s14 = (p or {}).get("semana14_redes")
+    if s14 is None:
+        return jsonify({
+            "disponible": False,
+            "detalle": _PIPELINE_ERROR or "modulo de la semana 14 no disponible",
+        })
+
+    caso = s14.ejecutar_caso()
+    return jsonify(_semana14_payload(
+        s14, "demo", [caso],
+        oraciones_rechazadas=[s14.EJEMPLO_RECHAZADO],
+    ))
+
+
 @app.route("/api/diagnostico", methods=["POST"])
 def diagnostico():
     """Caso A: diagnostico por imagen.
@@ -793,6 +894,10 @@ def diagnostico():
         # --- Semana 13: hechos reales + reglas + decision de manejo --------
         resultado["semanas"]["13"] = _semana13_desde_diagnostico(
             category, float(confidence), plan, comparacion)
+
+        # --- Semana 14: red semantica de la taxonomia ----------------------
+        resultado["semanas"]["14"] = _semana14_desde_diagnostico(
+            class_name, category)
 
         return jsonify(resultado)
 

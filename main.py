@@ -11,6 +11,7 @@ from src import (
     semana09_vision,
     semana10_texturas,
     semana13_conocimiento,
+    semana14_redes_semanticas,
 )
 
 
@@ -33,6 +34,8 @@ def main():
         semana10_texturas.run()
         print()
         semana13_conocimiento.run()
+        print()
+        semana14_redes_semanticas.run()
         return
 
     pipeline.main()
