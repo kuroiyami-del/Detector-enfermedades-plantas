@@ -13,6 +13,30 @@ def load_class_map() -> dict:
         return json.load(f)
 
 
+def dataset_disponible() -> bool:
+    """True si existen las imagenes crudas de PlantVillage en RAW_DIR.
+
+    Los CSV de `data/processed/` estan versionados, pero las imagenes no (ver
+    .gitignore). Las semanas que entrenan o evaluan sobre las imagenes
+    necesitan esta carpeta; las que solo usan el modelo guardado, no.
+    """
+    if not RAW_DIR.exists():
+        return False
+    return any(carpeta.is_dir() for carpeta in RAW_DIR.iterdir())
+
+
+def aviso_dataset_ausente() -> str:
+    """Mensaje accionable para cuando falta el dataset crudo."""
+    return (
+        "\n[FALTA EL DATASET] No se encontraron las imagenes crudas de\n"
+        f"  PlantVillage en: {RAW_DIR}\n"
+        "  Descarga el dataset y descomprimelo en data/raw/PlantVillage-Dataset/\n"
+        "  de modo que las 38 carpetas de clases queden en raw/color/.\n"
+        "  (Los CSV de data/processed/ ya estan, pero sin las imagenes no se\n"
+        "  puede entrenar ni evaluar sobre el dataset.)\n"
+    )
+
+
 def load_split(csv_name: str) -> pd.DataFrame:
     csv_path = PROCESSED_DIR / csv_name
     return pd.read_csv(csv_path)

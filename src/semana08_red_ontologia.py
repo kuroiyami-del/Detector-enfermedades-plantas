@@ -12,6 +12,7 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import accuracy_score
 
 from src.config import RAW_DIR, ARTIFACTS_DIR, RANDOM_STATE, MODELS_DIR
+from src.data_loader import aviso_dataset_ausente, dataset_disponible
 
 
 # ---------------------------------------------------------------------------
@@ -431,6 +432,12 @@ def run(forzar_entrenamiento=False):
     print("=" * 70)
     print("  Flujo: foto de hoja -> red neuronal (MLP) -> prediccion")
     print("         -> SQLite (evidencia) -> ontologia (significado)\n")
+
+    # El entrenamiento y la evaluacion necesitan las imagenes crudas. Sin el
+    # dataset se avisa con un mensaje claro en vez de fallar despues.
+    if not dataset_disponible():
+        print(aviso_dataset_ausente())
+        return
 
     # 1. Modelo: primero se decide si se reutiliza el modelo ya entrenado.
     #    Se hace antes de leer las imagenes para avisar cuanto antes si los mas

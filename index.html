@@ -335,7 +335,7 @@ footer{border-top:2px solid var(--color-ink-black);margin-top:var(--section-gap)
 <!-- ============ ANNOUNCEMENT ============ -->
 <div class="banner">
   <svg viewBox="0 0 24 24" fill="none" stroke="#222" stroke-width="1.6"><path d="M12 22V12M12 12C12 7 8 4 3 4c0 5 4 8 9 8zM12 12c0-5 4-8 9-8-5 0-9 3-9 8z"/></svg>
-  Diagnóstico botánico con inteligencia artificial · once semanas de conocimiento en una sola página
+  Diagnóstico botánico con inteligencia artificial · doce semanas de conocimiento en una sola página
   <svg viewBox="0 0 24 24" fill="none" stroke="#222" stroke-width="1.6"><path d="M12 22V12M12 12C12 7 8 4 3 4c0 5 4 8 9 8zM12 12c0-5 4-8 9-8-5 0-9 3-9 8z"/></svg>
 </div>
 
@@ -498,6 +498,7 @@ footer{border-top:2px solid var(--color-ink-black);margin-top:var(--section-gap)
         <a href="#semanas" id="footSemana11">Semana 11 · Benchmark</a>
         <a href="#semanas" id="footSemana13">Semana 13 · Motor de reglas</a>
         <a href="#semanas" id="footSemana14">Semana 14 · Red semántica</a>
+        <a href="#semanas" id="footSemana15">Semana 15 · Base de conocimiento</a>
         <a href="#semanas">Semana 05 · Sistema híbrido</a>
       </div>
     </div>
@@ -527,6 +528,8 @@ const state = {
   semana13Loading: false,
   semana14: null,      // demo de /api/semana14
   semana14Loading: false,
+  semana15: null,      // demo de /api/semana15
+  semana15Loading: false,
 };
 
 /* ----------------------------- utilidades ----------------------------- */
@@ -1106,6 +1109,53 @@ const renderers = {
           `<tr><td><code>${esc(t.sujeto)}</code></td><td class="muted">—${esc(t.relacion)}→</td><td><code>${esc(t.objeto)}</code></td></tr>`).join('')}</tbody></table>
     `;
   },
+  15(d){
+    if (!d || !d.disponible){
+      return `<div class="subhead">Semana 15 · Base de conocimiento</div>
+        <p class="mono muted">No disponible: ${esc((d && (d.detalle || d.error)) || 'sin datos')}</p>`;
+    }
+    const r = d.resumen || {};
+    const dominios = (d.dominios || []).map(x => `<tr>
+        <td><strong>${esc(x.dominio)}</strong></td>
+        <td>${x.articulos}</td>
+        <td>${x.validados}</td></tr>`).join('');
+    const articulos = (d.articulos || []).map(a => `<tr>
+        <td>${esc(a.titulo)}</td>
+        <td>${esc(a.responsable)}</td>
+        <td>${esc(a.aplicacion || '—')}</td>
+        <td>${esc(a.herramienta || '—')}</td>
+        <td>${esc(a.fuente)}</td>
+        <td>${esc(a.fecha_revision)}</td></tr>`).join('');
+    const todos = (d.todos || []).map(a => `<tr>
+        <td>${esc(a.titulo)}</td>
+        <td>${esc(a.dominio)}</td>
+        <td>${esc(a.responsable)}</td>
+        <td><span class="chip">${esc(a.estado)}</span></td></tr>`).join('');
+    return `
+      <div class="subhead">Semana 15 · Base de conocimiento (dominios · aplicaciones · expertos · herramientas)</div>
+      <p class="mono tiny muted">${d.modo === 'diagnostico'
+        ? (`Categoría detectada: <strong>${esc(d.categoria || '')}</strong> → dominio <strong>${esc(d.dominio_consultado || 'sin dominio')}</strong>. Solo se consultan los artículos <strong>validados</strong>.`)
+        : ('Repositorio de conocimiento del proyecto: artículos validados por dominio. Los borradores existen en la base de datos pero no se publican.')}</p>
+      <div class="big-result">
+        <div><div class="label">Artículos publicados</div><div class="value">${(d.articulos || []).length}</div></div>
+        <div style="min-width:260px"><div class="label">Repositorio</div>
+          <div class="value">${r.validados || 0} / ${r.articulos || 0} validados</div>
+          <p class="mono tiny muted">${r.dominios || 0} dominios · ${r.aplicaciones || 0} aplicaciones ·
+          ${r.expertos || 0} expertos · ${r.herramientas || 0} herramientas</p></div>
+      </div>
+      <div class="subhead">Artículos validados del dominio consultado</div>
+      <table><thead><tr><th>Título</th><th>Responsable</th><th>Aplicación</th><th>Herramienta</th><th>Fuente</th><th>Fecha</th></tr></thead>
+        <tbody>${articulos || '<tr><td colspan="6" class="muted">sin artículos validados</td></tr>'}</tbody></table>
+      <div class="divider"></div>
+      <div class="subhead">Organización por dominio</div>
+      <table><thead><tr><th>Dominio</th><th>Artículos</th><th>Validados</th></tr></thead>
+        <tbody>${dominios}</tbody></table>
+      <div class="divider"></div>
+      <div class="subhead">Todo el contenido (incluye borradores)</div>
+      <table><thead><tr><th>Título</th><th>Dominio</th><th>Responsable</th><th>Estado</th></tr></thead>
+        <tbody>${todos}</tbody></table>
+    `;
+  },
 };
 
 /* ============================== ACCIONES ============================== */
@@ -1181,6 +1231,21 @@ async function cargarSemana14(){
   return state.semana14;
 }
 
+async function cargarSemana15(){
+  if (state.semana15 || state.semana15Loading) return {};
+  state.semana15Loading = true;
+  try {
+    const res = await fetch('/api/semana15');
+    state.semana15 = await res.json();
+  } catch(err){
+    state.semana15 = { disponible: false, detalle: String(err.message || err) };
+  } finally {
+    state.semana15Loading = false;
+    if (state.activeWeek === 15) renderPane();
+  }
+  return state.semana15;
+}
+
 function cargandoSemana(titulo){
   return `<div class="subhead">${esc(titulo)}</div>
     <p class="mono muted">Cargando artefactos de la semana…</p>`;
@@ -1234,6 +1299,22 @@ function mostrarRedSemantica(){
   });
 }
 
+function mostrarBaseConocimiento(){
+  document.getElementById('semanas').scrollIntoView({behavior:'smooth'});
+  const weeks = { 15: { sub: 'Semana 15', label: 'Base de conocimiento',
+                        render: () => state.semana15
+                          ? renderers[15](state.semana15)
+                          : cargandoSemana('Semana 15 · Base de conocimiento') } };
+  state.mode = 'semana15';
+  setWeeks(weeks, 15, 'Semana 15 · Base de conocimiento');
+  cargarSemana15().then(d => {
+    if (state.activeWeek === 15) renderPane();
+    setStatus(d && d.disponible
+      ? `Semana 15 — base de conocimiento (${(d.resumen && d.resumen.validados) || 0} artículos validados).`
+      : 'Semana 15 no disponible.', d && d.disponible ? 'ok' : 'error');
+  });
+}
+
 $('btnDiagnose').addEventListener('click', async () => {
   if (!state.file){ setStatus('Selecciona una imagen antes de diagnosticar.', 'error'); return; }
   const fd = new FormData();
@@ -1271,6 +1352,10 @@ $('btnDiagnose').addEventListener('click', async () => {
                   render: () => s["14"]
                     ? renderers[14](s["14"])
                     : cargandoSemana('Semana 14 · Red semántica') };
+    weeks[15] = { sub: 'Semana 15', label: 'Base de conocimiento',
+                  render: () => s["15"]
+                    ? renderers[15](s["15"])
+                    : cargandoSemana('Semana 15 · Base de conocimiento') };
     state.mode = 'imagen';
     setWeeks(weeks, 2, `Imagen · ${data.clase} — ${pct(data.confianza)}`);
     setStatus(`Diagnóstico completo: ${data.clase} — ${pct(data.confianza)}`, 'ok');
@@ -1297,6 +1382,7 @@ async function consultar(){
 
     if (!state.semana13 && !state.semana13Loading) cargarSemana13();
     if (!state.semana14 && !state.semana14Loading) cargarSemana14();
+    if (!state.semana15 && !state.semana15Loading) cargarSemana15();
     const weeks = {
       5: {
         sub: 'Semana 05', label: 'Sistema híbrido',
@@ -1324,6 +1410,12 @@ async function consultar(){
         render: () => state.semana14
           ? renderers[14](state.semana14)
           : cargandoSemana('Semana 14 · Red semántica'),
+      },
+      15: {
+        sub: 'Semana 15', label: 'Base de conocimiento',
+        render: () => state.semana15
+          ? renderers[15](state.semana15)
+          : cargandoSemana('Semana 15 · Base de conocimiento'),
       }
     };
     state.mode = 'texto';
@@ -1346,6 +1438,7 @@ $('footSemana10').addEventListener('click', (e) => { e.preventDefault(); mostrar
 $('footSemana11').addEventListener('click', (e) => { e.preventDefault(); mostrarBenchmark(); });
 $('footSemana13').addEventListener('click', (e) => { e.preventDefault(); mostrarConocimiento(); });
 $('footSemana14').addEventListener('click', (e) => { e.preventDefault(); mostrarRedSemantica(); });
+$('footSemana15').addEventListener('click', (e) => { e.preventDefault(); mostrarBaseConocimiento(); });
 $('symptoms').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) consultar();
 });

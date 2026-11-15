@@ -108,7 +108,7 @@ Los datos se encuentran separados en los archivos CSV dentro de `data/processed/
 - **Vector:** `3` (area media, desviacion estandar del area y cantidad de regiones) `+ 32` (histograma de intensidad) `+ 18` (histograma LBP) `= 53`.
 - **Comparacion:** dos imagenes del dominio: `data/imagen_proyecto.png` (tomate con septoria) y `data/imagen_proyecto_2.png` (tomate sana, PlantVillage). La hoja enferma se fragmenta en 5 regiones de tamanos dispares; la sana forma una sola region homogenea.
 - **Interfaz web:** al pulsar **Diagnosticar**, la pestana Semana 10 compara la imagen subida por el usuario contra la hoja sana de referencia (`data/imagen_proyecto_2.png`) y genera `artifacts/web_semana10_comparacion.png` con la figura de esa comparacion. La pestana tambien muestra el resumen del vector de 53 valores y la tabla comparativa de las imagenes.
-- **Interfaz web (semanas 11, 13 y 14):** al pulsar **Diagnosticar**, Resultados incorpora las pestanas Semana 11, Semana 13 y Semana 14 junto a las demas. La Semana 11 lee y presenta `artifacts/benchmark.csv` (no reentrena), la Semana 13 razona con los hechos reales del diagnostico (categoria, confianza, plan A* y regiones visibles) y la Semana 14 consulta la red semantica con la clase detectada. Enlaces equivalentes en el pie de pagina (`#footSemana11`, `#footSemana13`, `#footSemana14`) y endpoints `/api/semana11` (benchmark), `/api/semana13` (motor de reglas) y `/api/semana14` (red semantica).
+- **Interfaz web (semanas 11, 13, 14 y 15):** al pulsar **Diagnosticar**, Resultados incorpora las pestanas Semana 11, Semana 13, Semana 14 y Semana 15 junto a las demas. La Semana 11 lee y presenta `artifacts/benchmark.csv` (no reentrena), la Semana 13 razona con los hechos reales del diagnostico (categoria, confianza, plan A* y regiones visibles), la Semana 14 consulta la red semantica con la clase detectada y la Semana 15 muestra los articulos **validados** del repositorio de conocimiento que corresponden a la categoria detectada. Enlaces equivalentes en el pie de pagina (`#footSemana11`, `#footSemana13`, `#footSemana14`, `#footSemana15`) y endpoints `/api/semana11` (benchmark), `/api/semana13` (motor de reglas), `/api/semana14` (red semantica) y `/api/semana15` (base de conocimiento).
 - **Artefactos:** `artifacts/semana10_features.npy` (vector e histogramas por imagen) y `artifacts/semana10_histograma.png` (figura comparativa).
 - **Reporte:** `reports/semana10.md`.
 - **Ejecucion:** `python -m src.semana10_texturas`
@@ -152,6 +152,22 @@ Los datos se encuentran separados en los archivos CSV dentro de `data/processed/
 - **Reporte:** `reports/reporte_semana14.md` (se genera con `python src/semana14_redes_semanticas.py --reporte`).
 - **Ejecucion:** `python -m src.semana14_redes_semanticas`
 
+### Semana 15 - Ingenieria del conocimiento: base de conocimiento
+
+- **Area:** Organizacion del conocimiento empresarial (ingenieria del conocimiento).
+- **Problema:** el conocimiento fitosanitario del proyecto estaba repartido entre codigo, reportes y comentarios de consola. Sin contexto es dificil de encontrar, de confiar y de mantener: un articulo sin dominio, responsable, fuente ni estado no es confiable.
+- **Metodo:** repositorio de conocimiento sobre **SQLite** con cinco tablas relacionales: `dominio` (area tematica), `aplicacion` (sistema o proceso donde se usa), `experto` (recurso humano responsable), `herramienta` (medio de captura o consulta) y `articulo` (el contenido con estado editorial `BORRADOR` / `VALIDADO`). Las consultas solo muestran lo **validado**: un borrador existe en la base pero no se publica.
+- **Dominios del proyecto:** Diagnostico foliar, Manejo fitosanitario y Calidad de datos (sustituyen a los ejemplos Seguridad y Soporte TI del material de la clase).
+- **Escenario:** se registra un articulo de manejo como borrador (no aparece en la busqueda), el experto lo valida y recien entonces se publica; ademas se comprueban los errores de integridad referencial y de articulo inexistente.
+- **Puente con el diagnostico:** `articulos_para_categoria(categoria)` devuelve el conocimiento validado que corresponde a la categoria de la semana 03 ("Enfermedades fungicas", "Plantas sanas"...) del caso real.
+- **Contenido del modulo:** esquema, datos, conexion con claves foraneas, busqueda, registro, validacion, 5 pruebas `unittest`, presentacion por consola y generacion del reporte, todo en `src/semana15_base_conocimiento.py`.
+- **Artefactos:** `artifacts/conocimiento.db` (repositorio con los datos de ejemplo) y `sql/esquema.sql` + `sql/datos.sql`.
+- **Interfaz web:** pestana **Semana 15 · Base de conocimiento** en `index.html` y endpoint `/api/semana15` en `server.py`; al diagnosticar una imagen muestra los articulos validados del dominio asociado a la categoria detectada.
+- **Material de referencia:** `referencia semana15/` (material de la clase usado como guia de forma y contenido).
+- **Reporte:** `reports/reporte_semana15.md` (se genera con `python src/semana15_base_conocimiento.py --reporte`).
+- **Ejecucion:** `python -m src.semana15_base_conocimiento`
+- **Pruebas:** `python -m unittest src.semana15_base_conocimiento -v` (o `python -m unittest discover -s tests -v`)
+
 ## Estructura del proyecto
 
 ```
@@ -162,6 +178,9 @@ plantas_enfermas/
 │   ├── imagen_proyecto.png                    # Imagen de entrada (semana 09)
 │   ├── imagen_proyecto_2.png                  # Segunda imagen de dominio (semana 10)
 │   └── base_conocimiento.txt                  # Base de conocimiento (semana 05)
+├── sql/                                       # Semana 15
+│   ├── esquema.sql                            # 5 tablas: dominio, aplicacion, experto, herramienta, articulo
+│   └── datos.sql                              # Datos ficticios del repositorio
 ├── src/
 │   ├── __init__.py
 │   ├── config.py                   # Constantes: paths, RANDOM_STATE, IMG_SIZE
@@ -177,12 +196,16 @@ plantas_enfermas/
 │   ├── semana11_benchmark.py       # Benchmark LogisticRegression / RandomForest / MLP
 │   ├── semana13_conocimiento.py    # Semana 13: reglas + encadenamiento + pruebas + reporte
 │   ├── semana14_redes_semanticas.py # Semana 14: red semantica + parser + inferencia
+│   ├── semana15_base_conocimiento.py # Semana 15: repositorio de conocimiento (SQLite)
 │   └── pipeline.py                 # Pipeline integrada image→prediccion→plan
-├── reports/                        # Reportes por semana (semana10.md, semana11_adr.md, reporte_semana13.md, reporte_semana14.md)
+├── tests/
+│   └── test_base_conocimiento.py   # Semana 15: cinco pruebas (descubribles con unittest)
+├── reports/                        # Reportes por semana (semana10.md, semana11_adr.md, reporte_semana13.md, reporte_semana14.md, reporte_semana15.md)
 ├── main.py                         # Punto de entrada (CLI)
 ├── server.py                       # Backend web (Flask) que sirve index.html
 ├── index.html                      # Interfaz web (diagnostico + barra de semanas)
-├── artifacts/                      # Artefactos semana 08/09/10/11 (modelo, BD, ontologia, paneles, benchmark)
+├── artifacts/                      # Artefactos semana 08/09/10/11/15 (modelo, BD, ontologia, paneles, benchmark, conocimiento.db)
+├── referencia semana15/             # Material de referencia de la semana 15
 ├── requirements.txt
 └── README.md
 ```
@@ -213,6 +236,14 @@ plantas_enfermas/
    ```
    pip install -r requirements.txt
    ```
+4. (Opcional, solo para las semanas 02, 08 y 11) Descargar el dataset
+   **PlantVillage** y descomprimirlo en `data/raw/PlantVillage-Dataset/`,
+   de modo que las 38 carpetas de clases queden en `raw/color/`. Los CSV de
+   `data/processed/` ya estan versionados, pero esas tres semanas entrenan y
+   evaluan sobre las imagenes: sin ellas avisan
+   `[FALTA EL DATASET] ...` y terminan sin ejecutar. El resto del proyecto
+   (incluida la interfaz web) funciona con los modelos guardados en
+   `models/` y `artifacts/`.
 
 ### Ejecutar la interfaz web
 
@@ -228,16 +259,18 @@ escritorio: seleccionar una imagen, escribir sintomas y los botones
 **Diagnosticar** (imagen) y **Consultar sintomas** (texto). Los resultados se
 muestran en una barra lateral por semanas:
 
-- **Caso A (imagen):** ejecuta las semanas 02, 03, 04, 07, 08, 09, 10, 11, 13 y 14 para esa
+- **Caso A (imagen):** ejecuta las semanas 02, 03, 04, 07, 08, 09, 10, 11, 13, 14 y 15 para esa
   planta. La semana 02 es la vista por defecto y la semana 10 compara la imagen
   enviada contra la hoja sana de referencia. La semana 11 solo lee
   `artifacts/benchmark.csv` (no reentrena); la semana 13 razona sobre los hechos
-  reales del diagnostico (categoria, confianza, plan A* y regiones) y la semana 14
-  consulta la red semantica con la clase detectada. La semana 05 no aparece.
+  reales del diagnostico (categoria, confianza, plan A* y regiones), la semana 14
+  consulta la red semantica con la clase detectada y la semana 15 muestra el
+  conocimiento validado del dominio asociado a la categoria. La semana 05 no aparece.
 - **Caso B (sintomas):** ejecuta la semana 05 (sistema hibrido) y la marca como
   la que se esta ejecutando; la semana 10 muestra la comparacion de ejemplo, la
-  11 presenta el benchmark, la 13 los dos casos del motor de reglas y la 14 la
-  red semantica de la taxonomia del proyecto.
+  11 presenta el benchmark, la 13 los dos casos del motor de reglas, la 14 la
+  red semantica de la taxonomia del proyecto y la 15 el repositorio de
+  conocimiento.
 
 Si se envia imagen y texto a la vez, cada boton mantiene su comportamiento
 independiente: "Diagnosticar" usa la imagen e ignora el texto; "Consultar
@@ -279,6 +312,7 @@ python -m src.semana10_texturas
 python -m src.semana11_benchmark
 python -m src.semana13_conocimiento
 python -m src.semana14_redes_semanticas
+python -m src.semana15_base_conocimiento
 ```
 
 > **Nota:** Los modulos individuales deben ejecutarse con `python -m src.<nombre>` desde la raiz del proyecto. No usar `python src/<nombre>.py` porque los imports no funcionarian.
@@ -286,5 +320,7 @@ python -m src.semana14_redes_semanticas
 > **Nota:** La Semana 13 tambien se puede ejecutar directamente con `python src/semana13_conocimiento.py`, probar con `python -m unittest src.semana13_conocimiento -v` y regenerar su reporte con `python src/semana13_conocimiento.py --reporte`.
 
 > **Nota:** La Semana 14 tambien se puede ejecutar directamente con `python src/semana14_redes_semanticas.py` y regenerar su reporte con `python src/semana14_redes_semanticas.py --reporte`.
+
+> **Nota:** La Semana 15 tambien se puede ejecutar directamente con `python src/semana15_base_conocimiento.py`, regenerar su reporte con `python src/semana15_base_conocimiento.py --reporte` y ejecutar sus pruebas con `python -m unittest src.semana15_base_conocimiento -v` (o `python -m unittest discover -s tests -v`).
 
 > **Nota:** La primera ejecucion de la semana 02 puede tardar varios minutos al cargar y redimensionar las imagenes del dataset.

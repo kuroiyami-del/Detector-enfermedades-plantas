@@ -7,7 +7,7 @@ ya existentes de los modulos src/semanaXX.py SIN modificarlos.
 
 Caso A (imagen):  semana02 + semana03 + semana04 + semana07 + semana08 + semana09
                   + semana10 + semana11 (benchmark) + semana13 (motor de reglas)
-                  + semana14 (red semantica)
+                  + semana14 (red semantica) + semana15 (base de conocimiento)
 Caso B (texto):   semana05 (sistema hibrido) via answer()
 
 Ejecutar:  python server.py
@@ -71,6 +71,7 @@ def pipeline():
             import src.semana10_texturas as semana10_texturas
             import src.semana13_conocimiento as semana13_conocimiento
             import src.semana14_redes_semanticas as semana14_redes
+            import src.semana15_base_conocimiento as semana15_conocimiento
 
             _PIPELINE = {
                 "load_model": load_model,
@@ -87,6 +88,7 @@ def pipeline():
                 "semana10_texturas": semana10_texturas,
                 "semana13_conocimiento": semana13_conocimiento,
                 "semana14_redes": semana14_redes,
+                "semana15_conocimiento": semana15_conocimiento,
             }
         except Exception as exc:  # pragma: no cover
             _PIPELINE_ERROR = str(exc)
@@ -196,6 +198,7 @@ def health():
         "benchmark": _semana11_disponible(),
         "conocimiento": "semana13_conocimiento" in (pipeline() or {}),
         "red_semantica": "semana14_redes" in (pipeline() or {}),
+        "base_conocimiento": "semana15_conocimiento" in (pipeline() or {}),
     })
 
 
@@ -713,6 +716,90 @@ def semana14_demo():
     ))
 
 
+# Semana 15: repositorio de conocimiento (dominios, aplicaciones, expertos,
+# herramientas y articulos validados).
+
+def _dominio_semana15(s15, categoria):
+    """Mapea la categoria de la semana 03 al dominio del repositorio."""
+    dominio = s15.DOMINIO_POR_CATEGORIA.get(categoria)
+    if dominio:
+        return dominio
+    cat = _normalizar_categoria(categoria or "")
+    if any(palabra in cat for palabra in
+           ("fungic", "bacterian", "viral", "plaga")):
+        return "Manejo fitosanitario"
+    if "sana" in cat:
+        return "Diagnostico foliar"
+    return None
+
+
+def _semana15_payload(s15, modo, categoria=None, dominio=None, articulos=None):
+    """Empaqueta el repositorio, sus articulos y el codigo de la semana 15."""
+    from src.config import ROOT
+
+    return {
+        "disponible": True,
+        "modo": modo,
+        "categoria": categoria,
+        "dominio_consultado": dominio,
+        "articulos": articulos or [],
+        "dominios": s15.listar_dominios(),
+        "todos": s15.listar_articulos(),
+        "resumen": s15.resumen(),
+        "codigo": _leer_texto(ROOT / "src" / "semana15_base_conocimiento.py"),
+        "reporte": _leer_texto(ROOT / "reports" / "reporte_semana15.md"),
+        "archivos": {
+            "codigo": "src/semana15_base_conocimiento.py",
+            "reporte": "reports/reporte_semana15.md",
+            "esquema": "sql/esquema.sql",
+            "datos": "sql/datos.sql",
+        },
+    }
+
+
+def _semana15_desde_diagnostico(categoria):
+    """Consulta el repositorio con la categoria detectada (semana 03)."""
+    p = pipeline()
+    s15 = (p or {}).get("semana15_conocimiento")
+    if s15 is None:
+        return {
+            "disponible": False,
+            "detalle": "modulo de la semana 15 no disponible",
+        }
+
+    try:
+        # Crea el repositorio si todavia no existe (esquema + datos).
+        s15.inicializar()
+        dominio = _dominio_semana15(s15, categoria)
+        articulos = s15.buscar_articulos(dominio) if dominio else []
+        return _semana15_payload(
+            s15, "diagnostico", categoria=categoria, dominio=dominio,
+            articulos=articulos)
+    except Exception as exc:  # pragma: no cover
+        return {"disponible": False, "detalle": str(exc)}
+
+
+@app.route("/api/semana15")
+def semana15_demo():
+    """Muestra el repositorio de conocimiento con sus articulos validados."""
+    p = pipeline()
+    s15 = (p or {}).get("semana15_conocimiento")
+    if s15 is None:
+        return jsonify({
+            "disponible": False,
+            "detalle": _PIPELINE_ERROR or "modulo de la semana 15 no disponible",
+        })
+
+    try:
+        s15.inicializar()
+        dominio = s15.DOMINIO_CASO
+        return jsonify(_semana15_payload(
+            s15, "demo", dominio=dominio,
+            articulos=s15.buscar_articulos(dominio)))
+    except Exception as exc:  # pragma: no cover
+        return jsonify({"disponible": False, "detalle": str(exc)})
+
+
 @app.route("/api/diagnostico", methods=["POST"])
 def diagnostico():
     """Caso A: diagnostico por imagen.
@@ -898,6 +985,11 @@ def diagnostico():
         # --- Semana 14: red semantica de la taxonomia ----------------------
         resultado["semanas"]["14"] = _semana14_desde_diagnostico(
             class_name, category)
+
+        # --- Semana 15: repositorio de conocimiento ------------------------
+        # Articulos validados del dominio que corresponde a la categoria
+        # detectada (semana 03).
+        resultado["semanas"]["15"] = _semana15_desde_diagnostico(category)
 
         return jsonify(resultado)
 

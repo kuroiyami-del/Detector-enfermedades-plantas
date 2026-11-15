@@ -10,7 +10,10 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 from src.config import IMG_SIZE, MODELS_DIR, RANDOM_STATE
-from src.data_loader import load_class_map, load_images, load_split, preprocess_single_image
+from src.data_loader import (
+    load_class_map, load_images, load_split, preprocess_single_image,
+    dataset_disponible, aviso_dataset_ausente,
+)
 
 
 def train_model():
@@ -80,6 +83,13 @@ def run():
     num_classes = len(class_map)
     print(f"\nClases detectadas: {num_classes}")
     print(f"Tamano de imagen: {IMG_SIZE}x{IMG_SIZE}x3 = {IMG_SIZE * IMG_SIZE * 3} features")
+
+    # El entrenamiento necesita las imagenes crudas; sin ellas se avisa con
+    # un mensaje claro en lugar de fallar mas adelante con una division por
+    # cero o un error de archivo.
+    if not dataset_disponible():
+        print(aviso_dataset_ausente())
+        return
 
     print("\n--- Cargando conjunto de ENTRENAMIENTO ---")
     train_df = load_split("train.csv")
@@ -157,3 +167,7 @@ def run():
     print("\n" + "=" * 70)
     print("Semana 02 completada.")
     print("=" * 70)
+
+
+if __name__ == "__main__":
+    run()

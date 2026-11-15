@@ -7,7 +7,7 @@ from PIL import Image
 from tkinter import Tk, filedialog
 
 from src.config import ARTIFACTS_DIR, RAW_DIR
-from src.data_loader import load_split
+from src.data_loader import load_split, aviso_dataset_ausente, dataset_disponible
 from src.semana02_entrenamiento import load_model, predict_single
 from src.semana03_taxonomia import classify_class
 from src.semana04_busqueda import TRATAMIENTOS, diagnose_recovery
@@ -113,6 +113,13 @@ def run(image_path=None, indice_muestra=0):
 
     class_real = None
     if image_path is None:
+        # El modo muestra toma una foto del dataset: sin las imagenes crudas
+        # no hay muestra que Diagnosticar.
+        if not dataset_disponible():
+            print(aviso_dataset_ausente())
+            print("  Para diagnosticar una foto tuya usa: "
+                  "python main.py ruta\\imagen.jpg\n")
+            return
         test_df = load_split("test.csv")
         fila = test_df.iloc[indice_muestra]
         image_path = str(RAW_DIR / fila["filepath"])

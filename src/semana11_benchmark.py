@@ -9,14 +9,20 @@ from sklearn.model_selection import train_test_split
 from sklearn.neural_network import MLPClassifier
 
 from src.config import ARTIFACTS_DIR, RANDOM_STATE, RAW_DIR
+from src.data_loader import aviso_dataset_ausente, dataset_disponible
 
 
 # ---------------------------------------------------------------------------
 # 1. CONFIGURACION Y CONSTANTES
 # ---------------------------------------------------------------------------
 
-# Cada carpeta de RAW_DIR es una clase de PlantVillage.
-CLASES = sorted(carpeta.name for carpeta in RAW_DIR.iterdir() if carpeta.is_dir())
+# Cada carpeta de RAW_DIR es una clase de PlantVillage. Se listan de forma
+# tolerante: si el dataset no esta descargado, la lista queda vacia y el
+# modulo avisa con un mensaje claro en vez de fallar al importarse.
+CLASES = sorted(
+    carpeta.name for carpeta in RAW_DIR.iterdir()
+    if carpeta.is_dir()
+) if RAW_DIR.exists() else []
 
 # Grises 48x48: 2304 caracteristicas, igual que la semana 08.
 TAMANO_IMAGEN = 48
@@ -171,6 +177,11 @@ def run():
     print("  Modelos: LogisticRegression | RandomForest | MLPClassifier")
     print(f"  Corridas: {NUMERO_CORRIDAS} (semillas "
           f"{SEMILLA_BASE}..{SEMILLA_BASE + NUMERO_CORRIDAS - 1})")
+
+    # El benchmark necesita las imagenes crudas de PlantVillage.
+    if not dataset_disponible():
+        print(aviso_dataset_ausente())
+        return
 
     X, y = cargar_dataset()
     datos = dividir_datos(X, y)

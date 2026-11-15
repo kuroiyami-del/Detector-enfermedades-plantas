@@ -104,3 +104,7 @@ def run():
     print("\n" + "=" * 70)
     print("Semana 03 completada.")
     print("=" * 70)
+
+
+if __name__ == "__main__":
+    run()
