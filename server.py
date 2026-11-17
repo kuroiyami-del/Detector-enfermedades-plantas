@@ -63,6 +63,7 @@ def pipeline():
             from src.semana03_taxonomia import classify_class
             from src.semana04_busqueda import diagnose_recovery
             from src.semana05_sistema_hibrido import answer
+            import src.semana16_motor_referencia as semana16_motor
             from src.semana07_representaciones import (
                 validar_secuencia, extraer_vector_hoja, distancia_hoja_sana,
                 representacion_simbolica,
@@ -80,6 +81,7 @@ def pipeline():
                 "classify_class": classify_class,
                 "diagnose_recovery": diagnose_recovery,
                 "answer": answer,
+                "semana16_motor": semana16_motor,
                 "validar_secuencia": validar_secuencia,
                 "extraer_vector_hoja": extraer_vector_hoja,
                 "distancia_hoja_sana": distancia_hoja_sana,
@@ -199,6 +201,7 @@ def health():
         "conocimiento": "semana13_conocimiento" in (pipeline() or {}),
         "red_semantica": "semana14_redes" in (pipeline() or {}),
         "base_conocimiento": "semana15_conocimiento" in (pipeline() or {}),
+        "motor_referencia": "semana16_motor" in (pipeline() or {}),
     })
 
 
@@ -800,6 +803,71 @@ def semana15_demo():
         return jsonify({"disponible": False, "detalle": str(exc)})
 
 
+# Semana 16: motor de referencia (arquitectura de sistemas inteligentes).
+
+def _semana16_payload(s16, modo, caso=None, pregunta=None, resultado=None):
+    """Empaqueta la arquitectura, la base, los escenarios y el codigo."""
+    from src.config import ROOT
+
+    return {
+        "disponible": True,
+        "modo": modo,
+        "componentes": caso["componentes"] if caso else s16.COMPONENTES,
+        "pregunta": pregunta,
+        "resultado": resultado,
+        "base": caso["base"] if caso else s16.construir_base(),
+        "escenarios": caso["escenarios"] if caso else [],
+        "codigo": _leer_texto(ROOT / "src" / "semana16_motor_referencia.py"),
+        "reporte": _leer_texto(ROOT / "reports" / "reporte_semana16.md"),
+        "archivos": {
+            "codigo": "src/semana16_motor_referencia.py",
+            "reporte": "reports/reporte_semana16.md",
+            "base": "artifacts/conocimiento.db",
+        },
+    }
+
+
+def _semana16_desde_diagnostico(clase):
+    """Consulta el motor con una pregunta generada desde la clase detectada."""
+    p = pipeline()
+    s16 = (p or {}).get("semana16_motor")
+    if s16 is None:
+        return {
+            "disponible": False,
+            "detalle": "modulo de la semana 16 no disponible",
+        }
+
+    try:
+        pregunta = s16.pregunta_desde_clase(clase)
+        respuesta = s16.consultar(pregunta)
+        return _semana16_payload(
+            s16, "diagnostico", pregunta=pregunta,
+            resultado={
+                "estado": respuesta["estado"],
+                "mensaje": respuesta["mensaje"],
+                "referencia": respuesta["referencia"],
+            })
+    except Exception as exc:  # pragma: no cover
+        return {"disponible": False, "detalle": str(exc)}
+
+
+@app.route("/api/semana16")
+def semana16_demo():
+    """Muestra el motor de referencia con sus cinco escenarios de demo."""
+    p = pipeline()
+    s16 = (p or {}).get("semana16_motor")
+    if s16 is None:
+        return jsonify({
+            "disponible": False,
+            "detalle": _PIPELINE_ERROR or "modulo de la semana 16 no disponible",
+        })
+
+    try:
+        return jsonify(_semana16_payload(s16, "demo", caso=s16.ejecutar_caso()))
+    except Exception as exc:  # pragma: no cover
+        return jsonify({"disponible": False, "detalle": str(exc)})
+
+
 @app.route("/api/diagnostico", methods=["POST"])
 def diagnostico():
     """Caso A: diagnostico por imagen.
@@ -870,6 +938,9 @@ def diagnostico():
             "meta_inalcanzable": plan is None and cat != "Plantas sanas",
             "planta_sana": cat == "Plantas sanas",
         }
+
+        # --- Semana 16: motor de referencia ---------------------------------
+        resultado["semanas"]["16"] = _semana16_desde_diagnostico(class_name)
 
         # --- Semana 07: representaciones (numerica + simbolica + automata) -
         vector = p["extraer_vector_hoja"](ruta)

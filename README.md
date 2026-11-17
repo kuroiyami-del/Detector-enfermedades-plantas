@@ -108,7 +108,7 @@ Los datos se encuentran separados en los archivos CSV dentro de `data/processed/
 - **Vector:** `3` (area media, desviacion estandar del area y cantidad de regiones) `+ 32` (histograma de intensidad) `+ 18` (histograma LBP) `= 53`.
 - **Comparacion:** dos imagenes del dominio: `data/imagen_proyecto.png` (tomate con septoria) y `data/imagen_proyecto_2.png` (tomate sana, PlantVillage). La hoja enferma se fragmenta en 5 regiones de tamanos dispares; la sana forma una sola region homogenea.
 - **Interfaz web:** al pulsar **Diagnosticar**, la pestana Semana 10 compara la imagen subida por el usuario contra la hoja sana de referencia (`data/imagen_proyecto_2.png`) y genera `artifacts/web_semana10_comparacion.png` con la figura de esa comparacion. La pestana tambien muestra el resumen del vector de 53 valores y la tabla comparativa de las imagenes.
-- **Interfaz web (semanas 11, 13, 14 y 15):** al pulsar **Diagnosticar**, Resultados incorpora las pestanas Semana 11, Semana 13, Semana 14 y Semana 15 junto a las demas. La Semana 11 lee y presenta `artifacts/benchmark.csv` (no reentrena), la Semana 13 razona con los hechos reales del diagnostico (categoria, confianza, plan A* y regiones visibles), la Semana 14 consulta la red semantica con la clase detectada y la Semana 15 muestra los articulos **validados** del repositorio de conocimiento que corresponden a la categoria detectada. Enlaces equivalentes en el pie de pagina (`#footSemana11`, `#footSemana13`, `#footSemana14`, `#footSemana15`) y endpoints `/api/semana11` (benchmark), `/api/semana13` (motor de reglas), `/api/semana14` (red semantica) y `/api/semana15` (base de conocimiento).
+- **Interfaz web (semanas 11, 13, 14, 15 y 16):** al pulsar **Diagnosticar**, Resultados incorpora las pestanas Semana 11, Semana 13, Semana 14, Semana 15 y Semana 16 junto a las demas. La Semana 11 lee y presenta `artifacts/benchmark.csv` (no reentrena), la Semana 13 razona con los hechos reales del diagnostico (categoria, confianza, plan A* y regiones visibles), la Semana 14 consulta la red semantica con la clase detectada, la Semana 15 muestra los articulos **validados** del repositorio de conocimiento que corresponden a la categoria detectada y la Semana 16 recupera la referencia validada que soporta el diagnostico (o se abstiene: nunca inventa). Enlaces equivalentes en el pie de pagina (`#footSemana11`, `#footSemana13`, `#footSemana14`, `#footSemana15`, `#footSemana16`) y endpoints `/api/semana11` (benchmark), `/api/semana13` (motor de reglas), `/api/semana14` (red semantica), `/api/semana15` (base de conocimiento) y `/api/semana16` (motor de referencia).
 - **Artefactos:** `artifacts/semana10_features.npy` (vector e histogramas por imagen) y `artifacts/semana10_histograma.png` (figura comparativa).
 - **Reporte:** `reports/semana10.md`.
 - **Ejecucion:** `python -m src.semana10_texturas`
@@ -168,6 +168,22 @@ Los datos se encuentran separados en los archivos CSV dentro de `data/processed/
 - **Ejecucion:** `python -m src.semana15_base_conocimiento`
 - **Pruebas:** `python -m unittest src.semana15_base_conocimiento -v` (o `python -m unittest discover -s tests -v`)
 
+### Semana 16 - Diseno de sistemas inteligentes: motor de referencia
+
+- **Area:** Diseno de sistemas inteligentes (arquitectura y motor de referencia).
+- **Problema:** PlantAI diagnostica la planta y guarda conocimiento validado (semana 15), pero no tiene un componente que responda preguntas del usuario con ese conocimiento de forma trazable.
+- **Arquitectura:** los 6 componentes de la practica en un solo modulo: 1) Interfaz, 2) Normalizador, 3) Base de conocimiento, 4) Motor de referencia, 5) Generador de respuestas y 6) Control de calidad (8 pruebas `unittest` + 5 escenarios).
+- **Referencias:** cada una con identificador (`REF-00X`), titulo, palabras clave, respuesta, fuente y bandera `validada`; se construyen desde los articulos del repositorio de la semana 15 (`artifacts/conocimiento.db`), sin reescribir su contenido.
+- **Regla de oro:** solo responden referencias validadas; el articulo 5 esta en `BORRADOR` y nunca responde aunque sus claves coincidan. El motor nunca inventa respuestas: se abstiene con `SIN_DATOS` (consulta vacia) o `SIN_REFERENCIA` (sin cobertura o solo borradores).
+- **Sustentacion:** un motor de referencia NO es un motor de inferencia: no aplica reglas ni deriva conclusiones nuevas, recupera la referencia mas pertinente y entrega su id y su fuente. La puntuacion es un conteo de palabras en comun, no una probabilidad.
+- **Puente con el diagnostico:** `pregunta_desde_clase()` convierte la clase detectada (semana 02) en pregunta; la web muestra la referencia validada que soporta el diagnostico, o la abstencion si no hay evidencia.
+- **Contenido del modulo:** normalizador, construccion de la base, motor, generador, 5 escenarios, 8 pruebas `unittest`, consola interactiva (`--consola`) y generacion del reporte (`--reporte`), todo en `src/semana16_motor_referencia.py`.
+- **Interfaz web:** pestana **Semana 16 · Motor de referencia** en `index.html` y endpoint `/api/semana16` en `server.py`; al diagnosticar una imagen consulta el motor con la clase detectada.
+- **Material de referencia:** `referencia semana16/` (guia y presentacion de la clase).
+- **Reporte:** `reports/reporte_semana16.md` (se genera con `python src/semana16_motor_referencia.py --reporte`).
+- **Ejecucion:** `python -m src.semana16_motor_referencia`
+- **Pruebas:** `python -m unittest src.semana16_motor_referencia -v` (o `python -m unittest discover -s tests -v`)
+
 ## Estructura del proyecto
 
 ```
@@ -197,15 +213,18 @@ plantas_enfermas/
 │   ├── semana13_conocimiento.py    # Semana 13: reglas + encadenamiento + pruebas + reporte
 │   ├── semana14_redes_semanticas.py # Semana 14: red semantica + parser + inferencia
 │   ├── semana15_base_conocimiento.py # Semana 15: repositorio de conocimiento (SQLite)
+│   ├── semana16_motor_referencia.py  # Semana 16: arquitectura y motor de referencia
 │   └── pipeline.py                 # Pipeline integrada image→prediccion→plan
 ├── tests/
-│   └── test_base_conocimiento.py   # Semana 15: cinco pruebas (descubribles con unittest)
-├── reports/                        # Reportes por semana (semana10.md, semana11_adr.md, reporte_semana13.md, reporte_semana14.md, reporte_semana15.md)
+│   ├── test_base_conocimiento.py   # Semana 15: cinco pruebas (descubribles con unittest)
+│   └── test_motor.py               # Semana 16: ocho pruebas del motor de referencia
+├── reports/                        # Reportes por semana (semana10.md, semana11_adr.md, reporte_semana13.md, reporte_semana14.md, reporte_semana15.md, reporte_semana16.md)
 ├── main.py                         # Punto de entrada (CLI)
 ├── server.py                       # Backend web (Flask) que sirve index.html
 ├── index.html                      # Interfaz web (diagnostico + barra de semanas)
 ├── artifacts/                      # Artefactos semana 08/09/10/11/15 (modelo, BD, ontologia, paneles, benchmark, conocimiento.db)
 ├── referencia semana15/             # Material de referencia de la semana 15
+├── referencia semana16/             # Material de referencia de la semana 16
 ├── requirements.txt
 └── README.md
 ```
@@ -259,18 +278,21 @@ escritorio: seleccionar una imagen, escribir sintomas y los botones
 **Diagnosticar** (imagen) y **Consultar sintomas** (texto). Los resultados se
 muestran en una barra lateral por semanas:
 
-- **Caso A (imagen):** ejecuta las semanas 02, 03, 04, 07, 08, 09, 10, 11, 13, 14 y 15 para esa
+- **Caso A (imagen):** ejecuta las semanas 02, 03, 04, 07, 08, 09, 10, 11, 13, 14, 15 y 16 para esa
   planta. La semana 02 es la vista por defecto y la semana 10 compara la imagen
   enviada contra la hoja sana de referencia. La semana 11 solo lee
   `artifacts/benchmark.csv` (no reentrena); la semana 13 razona sobre los hechos
   reales del diagnostico (categoria, confianza, plan A* y regiones), la semana 14
-  consulta la red semantica con la clase detectada y la semana 15 muestra el
-  conocimiento validado del dominio asociado a la categoria. La semana 05 no aparece.
+  consulta la red semantica con la clase detectada, la semana 15 muestra el
+  conocimiento validado del dominio asociado a la categoria y la semana 16
+  consulta el motor de referencia con la clase detectada y muestra la referencia
+  validada que soporta el diagnostico (o la abstencion si no hay evidencia).
+  La semana 05 no aparece.
 - **Caso B (sintomas):** ejecuta la semana 05 (sistema hibrido) y la marca como
   la que se esta ejecutando; la semana 10 muestra la comparacion de ejemplo, la
   11 presenta el benchmark, la 13 los dos casos del motor de reglas, la 14 la
-  red semantica de la taxonomia del proyecto y la 15 el repositorio de
-  conocimiento.
+  red semantica de la taxonomia del proyecto, la 15 el repositorio de
+  conocimiento y la 16 el motor de referencia con sus cinco escenarios.
 
 Si se envia imagen y texto a la vez, cada boton mantiene su comportamiento
 independiente: "Diagnosticar" usa la imagen e ignora el texto; "Consultar
@@ -313,6 +335,7 @@ python -m src.semana11_benchmark
 python -m src.semana13_conocimiento
 python -m src.semana14_redes_semanticas
 python -m src.semana15_base_conocimiento
+python -m src.semana16_motor_referencia
 ```
 
 > **Nota:** Los modulos individuales deben ejecutarse con `python -m src.<nombre>` desde la raiz del proyecto. No usar `python src/<nombre>.py` porque los imports no funcionarian.
@@ -322,5 +345,7 @@ python -m src.semana15_base_conocimiento
 > **Nota:** La Semana 14 tambien se puede ejecutar directamente con `python src/semana14_redes_semanticas.py` y regenerar su reporte con `python src/semana14_redes_semanticas.py --reporte`.
 
 > **Nota:** La Semana 15 tambien se puede ejecutar directamente con `python src/semana15_base_conocimiento.py`, regenerar su reporte con `python src/semana15_base_conocimiento.py --reporte` y ejecutar sus pruebas con `python -m unittest src.semana15_base_conocimiento -v` (o `python -m unittest discover -s tests -v`).
+
+> **Nota:** La Semana 16 tambien se puede ejecutar directamente con `python src/semana16_motor_referencia.py`, abrir una consola interactiva de preguntas con `python src/semana16_motor_referencia.py --consola`, regenerar su reporte con `python src/semana16_motor_referencia.py --reporte` y ejecutar sus pruebas con `python -m unittest src.semana16_motor_referencia -v` (o `python -m unittest discover -s tests -v`).
 
 > **Nota:** La primera ejecucion de la semana 02 puede tardar varios minutos al cargar y redimensionar las imagenes del dataset.

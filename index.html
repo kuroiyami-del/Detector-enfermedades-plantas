@@ -499,6 +499,7 @@ footer{border-top:2px solid var(--color-ink-black);margin-top:var(--section-gap)
         <a href="#semanas" id="footSemana13">Semana 13 · Motor de reglas</a>
         <a href="#semanas" id="footSemana14">Semana 14 · Red semántica</a>
         <a href="#semanas" id="footSemana15">Semana 15 · Base de conocimiento</a>
+        <a href="#semanas" id="footSemana16">Semana 16 · Motor de referencia</a>
         <a href="#semanas">Semana 05 · Sistema híbrido</a>
       </div>
     </div>
@@ -530,6 +531,8 @@ const state = {
   semana14Loading: false,
   semana15: null,      // demo de /api/semana15
   semana15Loading: false,
+  semana16: null,      // demo de /api/semana16 (motor de referencia)
+  semana16Loading: false,
 };
 
 /* ----------------------------- utilidades ----------------------------- */
@@ -1156,6 +1159,64 @@ const renderers = {
         <tbody>${todos}</tbody></table>
     `;
   },
+  16(d){
+    if (!d || !d.disponible){
+      return `<div class="subhead">Semana 16 · Motor de referencia</div>
+        <p class="mono muted">No disponible: ${esc((d && (d.detalle || d.error)) || 'sin datos')}</p>`;
+    }
+    const componentes = (d.componentes || []).map(c => `<tr>
+        <td><strong>${esc(c.nombre)}</strong></td>
+        <td>${esc(c.responsabilidad)}</td>
+        <td class="mono tiny muted">${esc(c.relacion)}</td></tr>`).join('');
+    const base = (d.base || []).map(r => `<tr class="${r.validada ? '' : 'hit'}">
+        <td>${esc(r.id)}</td>
+        <td>${esc(r.titulo)}</td>
+        <td>${(r.claves || []).map(k => `<code>${esc(k)}</code>`).join(' · ')}</td>
+        <td>${tag(r.validada)}</td>
+        <td>${esc(r.fuente)}</td></tr>`).join('');
+    let directo = '';
+    if (d.modo === 'diagnostico' && d.resultado){
+      const r = d.resultado;
+      const ref = r.referencia;
+      directo = `
+        <div class="big-result">
+          <div><div class="label">Pregunta generada</div>
+            <div class="value mono">${esc(d.pregunta || '')}</div></div>
+          <div><div class="label">Estado</div>
+            <div class="value"><span class="chip">${esc(r.estado)}</span></div></div>
+        </div>
+        <p class="mono" style="margin-top:12px">${esc(r.mensaje)}</p>
+        ${ref ? `<p class="mono tiny muted">Fuente utilizada: [${esc(ref.id)}] ${esc(ref.titulo)} — ${esc(ref.fuente)} · coincidencias: ${ref.coincidencias}</p>` : ''}`;
+    }
+    const escenarios = (d.escenarios || []).map(e => {
+      const consulta = esc((e.consulta || '').trim()) || '<span class="muted">(vacía)</span>';
+      const fuente = e.referencia ? `[${esc(e.referencia.id)}] ${esc(e.referencia.fuente)}` : '—';
+      return `<tr>
+        <td>${esc(e.nombre)} · ${esc(e.descripcion)}</td>
+        <td class="mono tiny">${consulta}</td>
+        <td><span class="chip">${esc(e.estado)}</span></td>
+        <td class="mono tiny">${fuente}</td></tr>`;
+    }).join('');
+    return `
+      <div class="subhead">Semana 16 · Motor de referencia</div>
+      <p class="mono tiny muted">${d.modo === 'diagnostico'
+        ? 'La pregunta se genera automáticamente a partir de la clase detectada (semana 02). El motor compara sus palabras con las claves de las referencias, ignora los borradores y responde solo con fuentes validadas; si no hay evidencia, se abstiene en lugar de inventar.'
+        : 'Escenarios de demostración ejecutados sobre la base de conocimiento real de la semana 15 (artifacts/conocimiento.db). El motor no inventa respuestas: recupera referencias validadas o se abstiene.'}</p>
+      ${directo}
+      <div class="subhead">Arquitectura del sistema inteligente</div>
+      <table><thead><tr><th>Componente</th><th>Responsabilidad</th><th>Cómo se relaciona</th></tr></thead>
+        <tbody>${componentes}</tbody></table>
+      ${d.escenarios && d.escenarios.length ? `
+      <div class="subhead">Escenarios probados</div>
+      <table><thead><tr><th>Caso</th><th>Consulta</th><th>Estado</th><th>Fuente utilizada</th></tr></thead>
+        <tbody>${escenarios}</tbody></table>` : ''}
+      <div class="divider"></div>
+      <div class="subhead">Base de conocimiento (referencias desde la semana 15)</div>
+      <table><thead><tr><th>ID</th><th>Título</th><th>Palabras clave</th><th>Validada</th><th>Fuente</th></tr></thead>
+        <tbody>${base}</tbody></table>
+      <p class="mono tiny muted">La fila resaltada es un borrador: el motor la excluye aunque sus palabras coincidan con la consulta.</p>
+    `;
+  },
 };
 
 /* ============================== ACCIONES ============================== */
@@ -1246,6 +1307,22 @@ async function cargarSemana15(){
   return state.semana15;
 }
 
+async function cargarSemana16(){
+  if (state.semana16) return state.semana16;
+  if (state.semana16Loading) return {};
+  state.semana16Loading = true;
+  try {
+    const res = await fetch('/api/semana16');
+    state.semana16 = await res.json();
+  } catch(err){
+    state.semana16 = { disponible: false, detalle: String(err.message || err) };
+  } finally {
+    state.semana16Loading = false;
+    if (state.activeWeek === 16) renderPane();
+  }
+  return state.semana16;
+}
+
 function cargandoSemana(titulo){
   return `<div class="subhead">${esc(titulo)}</div>
     <p class="mono muted">Cargando artefactos de la semana…</p>`;
@@ -1315,6 +1392,22 @@ function mostrarBaseConocimiento(){
   });
 }
 
+function mostrarMotorReferencia(){
+  document.getElementById('semanas').scrollIntoView({behavior:'smooth'});
+  const weeks = { 16: { sub: 'Semana 16', label: 'Motor de referencia',
+                        render: () => state.semana16
+                          ? renderers[16](state.semana16)
+                          : cargandoSemana('Semana 16 · Motor de referencia') } };
+  state.mode = 'semana16';
+  setWeeks(weeks, 16, 'Semana 16 · Motor de referencia');
+  cargarSemana16().then(d => {
+    if (state.activeWeek === 16) renderPane();
+    setStatus(d && d.disponible
+      ? `Semana 16 — motor de referencia listo (${(d.base || []).length} referencias, ${(d.escenarios || []).length} escenarios).`
+      : 'Semana 16 no disponible.', d && d.disponible ? 'ok' : 'error');
+  });
+}
+
 $('btnDiagnose').addEventListener('click', async () => {
   if (!state.file){ setStatus('Selecciona una imagen antes de diagnosticar.', 'error'); return; }
   const fd = new FormData();
@@ -1356,6 +1449,10 @@ $('btnDiagnose').addEventListener('click', async () => {
                   render: () => s["15"]
                     ? renderers[15](s["15"])
                     : cargandoSemana('Semana 15 · Base de conocimiento') };
+    weeks[16] = { sub: 'Semana 16', label: 'Motor de referencia',
+                  render: () => s["16"]
+                    ? renderers[16](s["16"])
+                    : cargandoSemana('Semana 16 · Motor de referencia') };
     state.mode = 'imagen';
     setWeeks(weeks, 2, `Imagen · ${data.clase} — ${pct(data.confianza)}`);
     setStatus(`Diagnóstico completo: ${data.clase} — ${pct(data.confianza)}`, 'ok');
@@ -1383,6 +1480,7 @@ async function consultar(){
     if (!state.semana13 && !state.semana13Loading) cargarSemana13();
     if (!state.semana14 && !state.semana14Loading) cargarSemana14();
     if (!state.semana15 && !state.semana15Loading) cargarSemana15();
+    if (!state.semana16 && !state.semana16Loading) cargarSemana16();
     const weeks = {
       5: {
         sub: 'Semana 05', label: 'Sistema híbrido',
@@ -1416,6 +1514,12 @@ async function consultar(){
         render: () => state.semana15
           ? renderers[15](state.semana15)
           : cargandoSemana('Semana 15 · Base de conocimiento'),
+      },
+      16: {
+        sub: 'Semana 16', label: 'Motor de referencia',
+        render: () => state.semana16
+          ? renderers[16](state.semana16)
+          : cargandoSemana('Semana 16 · Motor de referencia'),
       }
     };
     state.mode = 'texto';
@@ -1439,6 +1543,7 @@ $('footSemana11').addEventListener('click', (e) => { e.preventDefault(); mostrar
 $('footSemana13').addEventListener('click', (e) => { e.preventDefault(); mostrarConocimiento(); });
 $('footSemana14').addEventListener('click', (e) => { e.preventDefault(); mostrarRedSemantica(); });
 $('footSemana15').addEventListener('click', (e) => { e.preventDefault(); mostrarBaseConocimiento(); });
+$('footSemana16').addEventListener('click', (e) => { e.preventDefault(); mostrarMotorReferencia(); });
 $('symptoms').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) consultar();
 });
@@ -1467,6 +1572,7 @@ fetch('/api/health').then(r => r.json()).then(h => {
 
 cargarSemana10();
 cargarSemana11();
+cargarSemana16();
 </script>
 </body>
 </html>
